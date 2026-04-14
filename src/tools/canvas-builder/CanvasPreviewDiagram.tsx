@@ -68,9 +68,8 @@ export function CanvasPreviewDiagram({ width, height, woodWidth, supportBraces }
         />
 
         <path
-          d={`M ${frameX} ${frameY} H ${frameX + frameWidth} V ${frameY + frameHeight} H ${frameX} Z M ${innerX} ${innerY} H ${
-            innerX + innerWidth
-          } V ${innerY + innerHeight} H ${innerX} Z`}
+          d={`M ${frameX} ${frameY} H ${frameX + frameWidth} V ${frameY + frameHeight} H ${frameX} Z M ${innerX} ${innerY} H ${innerX + innerWidth
+            } V ${innerY + innerHeight} H ${innerX} Z`}
           fillRule="evenodd"
           className="canvas-frame"
         />

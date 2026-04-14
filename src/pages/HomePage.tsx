@@ -26,6 +26,18 @@ export function HomePage() {
           </Link>
         </article>
 
+        <article className="tool-card featured-card">
+          <p className="tool-index">02</p>
+          <h2>Camera Tonal Study</h2>
+          <p>
+            Compare grayscale and 2-5 tone posterized studies from a live camera feed or
+            uploaded reference image.
+          </p>
+          <Link to="/tools/posterize-viewer" className="tool-link">
+            Open tool
+          </Link>
+        </article>
+
         <article className="tool-card muted-card">
           <p className="tool-index">Next</p>
           <h2>More studio helpers</h2>
