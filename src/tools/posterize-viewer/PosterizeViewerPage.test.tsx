@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,12 +39,14 @@ describe('PosterizeViewerPage', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: /value study/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /toggle camera/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /switch front or back camera/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /pause current frame/i })).toBeDisabled();
     expect(screen.getByRole('button', { name: /next value stage/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /toggle grayscale or color/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save current image/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/upload source image/i)).toBeInTheDocument();
 
-    expect(screen.getByRole('heading', { name: /original/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /source/i })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /2 values/i })).not.toBeInTheDocument();
   });
 
@@ -55,13 +57,44 @@ describe('PosterizeViewerPage', () => {
 
     await user.click(screen.getByRole('button', { name: /toggle camera/i }));
 
-    expect(getUserMedia).toHaveBeenCalledWith({ video: true });
+    expect(getUserMedia).toHaveBeenCalledWith({
+      video: {
+        facingMode: { ideal: 'environment' }
+      }
+    });
     expect(screen.getByRole('button', { name: /toggle camera/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /pause current frame/i })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: /toggle camera/i }));
 
     expect(stopTrack).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('button', { name: /toggle camera/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('button', { name: /pause current frame/i })).toBeDisabled();
+  });
+
+  it('switches between back and front camera streams', async () => {
+    const user = userEvent.setup();
+
+    render(<PosterizeViewerPage />);
+
+    await user.click(screen.getByRole('button', { name: /toggle camera/i }));
+    await user.click(screen.getByRole('button', { name: /switch front or back camera/i }));
+
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).toHaveBeenNthCalledWith(2, {
+      video: {
+        facingMode: { ideal: 'user' }
+      }
+    });
+
+    await user.click(screen.getByRole('button', { name: /switch front or back camera/i }));
+
+    expect(stopTrack).toHaveBeenCalledTimes(2);
+    expect(getUserMedia).toHaveBeenNthCalledWith(3, {
+      video: {
+        facingMode: { ideal: 'environment' }
+      }
+    });
   });
 
   it('cycles value stage, toggles color mode, and saves current output', async () => {
@@ -96,5 +129,54 @@ describe('PosterizeViewerPage', () => {
 
     await user.click(screen.getByRole('button', { name: /study preview/i }));
     expect(screen.getByRole('heading', { name: /3 values/i })).toBeInTheDocument();
+  });
+
+  it('pauses and resumes the current camera frame', async () => {
+    const user = userEvent.setup();
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+
+    render(<PosterizeViewerPage />);
+
+    await user.click(screen.getByRole('button', { name: /toggle camera/i }));
+    await user.click(screen.getByRole('button', { name: /pause current frame/i }));
+
+    expect(pauseSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: /resume live camera/i })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(screen.getByRole('button', { name: /resume live camera/i }));
+
+    expect(playSpy).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: /pause current frame/i })).toHaveAttribute('aria-pressed', 'false');
+
+    pauseSpy.mockRestore();
+  });
+
+  it('updates the camera preview frame to match the live aspect ratio', async () => {
+    const user = userEvent.setup();
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+    const { container } = render(<PosterizeViewerPage />);
+
+    await user.click(screen.getByRole('button', { name: /toggle camera/i }));
+
+    const video = container.querySelector('video');
+    const sourceFrame = container.querySelector('.poster-source-frame');
+
+    expect(video).not.toBeNull();
+    expect(sourceFrame).not.toBeNull();
+
+    Object.defineProperty(video, 'videoWidth', {
+      configurable: true,
+      value: 720
+    });
+    Object.defineProperty(video, 'videoHeight', {
+      configurable: true,
+      value: 1280
+    });
+
+    fireEvent.loadedMetadata(video as HTMLVideoElement);
+
+    expect(sourceFrame).toHaveStyle({ aspectRatio: '720 / 1280' });
+
+    getContextSpy.mockRestore();
   });
 });

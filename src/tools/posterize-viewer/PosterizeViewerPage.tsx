@@ -1,15 +1,21 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, CameraOff, Download, ImagePlus, Layers3, Palette } from 'lucide-react';
+import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, CameraOff, Download, ImagePlus, Layers3, Palette, Pause, Play, RefreshCcw } from 'lucide-react';
 
 import { applyPosterStageToImageData, buildPosterStages, type PosterRenderMode, type PosterStage } from './posterize';
 
 type CameraStatus = 'camera-off' | 'camera-active' | 'image-mode' | 'camera-error';
+type CameraFacingMode = 'environment' | 'user';
+
+const DEFAULT_SOURCE_ASPECT_RATIO = '3 / 4';
 
 export function PosterizeViewerPage() {
   const stages = useMemo(() => buildPosterStages(), []);
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('camera-off');
+  const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>('environment');
+  const [cameraPaused, setCameraPaused] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [sourceAspectRatio, setSourceAspectRatio] = useState(DEFAULT_SOURCE_ASPECT_RATIO);
   const [activeStageIndex, setActiveStageIndex] = useState(0);
   const [renderMode, setRenderMode] = useState<PosterRenderMode>('grayscale');
 
@@ -33,7 +39,7 @@ export function PosterizeViewerPage() {
   }, [imageUrl]);
 
   useEffect(() => {
-    if (cameraStatus !== 'camera-active') {
+    if (cameraStatus !== 'camera-active' || cameraPaused) {
       cancelAnimationLoop(animationFrameRef.current);
       animationFrameRef.current = null;
       return;
@@ -50,7 +56,7 @@ export function PosterizeViewerPage() {
       cancelAnimationLoop(animationFrameRef.current);
       animationFrameRef.current = null;
     };
-  }, [cameraStatus, activeStage, renderMode]);
+  }, [cameraStatus, cameraPaused, activeStage, renderMode]);
 
   useEffect(() => {
     if (cameraStatus === 'image-mode') {
@@ -58,7 +64,7 @@ export function PosterizeViewerPage() {
     }
   }, [cameraStatus, activeStage, renderMode]);
 
-  async function handleStartCamera() {
+  async function handleStartCamera(nextFacingMode = cameraFacingMode) {
     const mediaDevices = navigator.mediaDevices;
 
     if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
@@ -68,25 +74,22 @@ export function PosterizeViewerPage() {
     }
 
     try {
+      cancelAnimationLoop(animationFrameRef.current);
       stopStream(streamRef.current);
+      streamRef.current = null;
 
-      const stream = await mediaDevices.getUserMedia({ video: true });
+      const stream = await mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: nextFacingMode }
+        }
+      });
       streamRef.current = stream;
 
       const video = videoRef.current;
       if (video) {
         const streamTarget = video as HTMLVideoElement & { srcObject: MediaStream | null };
         streamTarget.srcObject = stream;
-        try {
-          const playResult = video.play();
-          if (playResult && typeof playResult.catch === 'function') {
-            playResult.catch(() => {
-              // Ignore autoplay errors; user can still interact to start playback.
-            });
-          }
-        } catch {
-          // Ignore missing play implementations in tests or constrained environments.
-        }
+        void playVideo(video);
       }
 
       if (imageUrl) {
@@ -94,6 +97,8 @@ export function PosterizeViewerPage() {
         setImageUrl(null);
       }
 
+      setCameraFacingMode(nextFacingMode);
+      setCameraPaused(false);
       setErrorMessage(null);
       setCameraStatus('camera-active');
     } catch {
@@ -103,6 +108,8 @@ export function PosterizeViewerPage() {
   }
 
   function handleStopCamera() {
+    cancelAnimationLoop(animationFrameRef.current);
+    animationFrameRef.current = null;
     stopStream(streamRef.current);
     streamRef.current = null;
 
@@ -112,6 +119,8 @@ export function PosterizeViewerPage() {
       streamTarget.srcObject = null;
     }
 
+    setCameraPaused(false);
+    setSourceAspectRatio(DEFAULT_SOURCE_ASPECT_RATIO);
     setCameraStatus('camera-off');
   }
 
@@ -130,12 +139,21 @@ export function PosterizeViewerPage() {
 
     const nextImageUrl = URL.createObjectURL(file);
     setImageUrl(nextImageUrl);
+    setSourceAspectRatio(DEFAULT_SOURCE_ASPECT_RATIO);
     setErrorMessage(null);
     setCameraStatus('image-mode');
   }
 
-  function handleImageLoad() {
-    renderFrameFromImage(imageRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+  function handleImageLoad(event: SyntheticEvent<HTMLImageElement>) {
+    const image = event.currentTarget;
+    setSourceAspectRatio(buildAspectRatioValue(image.naturalWidth, image.naturalHeight));
+    renderFrameFromImage(image, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+  }
+
+  function handleVideoMetadata(event: SyntheticEvent<HTMLVideoElement>) {
+    const video = event.currentTarget;
+    setSourceAspectRatio(buildAspectRatioValue(video.videoWidth, video.videoHeight));
+    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
   }
 
   async function handleCameraToggle() {
@@ -145,6 +163,38 @@ export function PosterizeViewerPage() {
     }
 
     await handleStartCamera();
+  }
+
+  async function handleSwitchCamera() {
+    const nextFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
+    setCameraFacingMode(nextFacingMode);
+
+    if (cameraStatus !== 'camera-active') {
+      return;
+    }
+
+    await handleStartCamera(nextFacingMode);
+  }
+
+  async function handlePauseToggle() {
+    if (cameraStatus !== 'camera-active') {
+      return;
+    }
+
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    if (cameraPaused) {
+      void playVideo(video);
+      setCameraPaused(false);
+      return;
+    }
+
+    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+    video.pause();
+    setCameraPaused(true);
   }
 
   function handleStageToggle() {
@@ -193,6 +243,32 @@ export function PosterizeViewerPage() {
               )}
             </button>
 
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Switch front or back camera"
+              title={`Switch to ${cameraFacingMode === 'environment' ? 'front' : 'back'} camera`}
+              onClick={() => {
+                void handleSwitchCamera();
+              }}
+            >
+              <RefreshCcw size={18} strokeWidth={2} aria-hidden="true" />
+            </button>
+
+            <button
+              type="button"
+              className={`icon-button${cameraPaused ? ' icon-button-active' : ''}`}
+              aria-label={cameraPaused ? 'Resume live camera' : 'Pause current frame'}
+              aria-pressed={cameraPaused}
+              title={cameraPaused ? 'Resume live camera' : 'Pause current frame'}
+              disabled={cameraStatus !== 'camera-active'}
+              onClick={() => {
+                void handlePauseToggle();
+              }}
+            >
+              {cameraPaused ? <Play size={18} strokeWidth={2} aria-hidden="true" /> : <Pause size={18} strokeWidth={2} aria-hidden="true" />}
+            </button>
+
             <label className="poster-file-input">
               <span className="sr-only">Upload source image</span>
               <ImagePlus size={18} strokeWidth={2} aria-hidden="true" />
@@ -224,7 +300,20 @@ export function PosterizeViewerPage() {
           {errorMessage ? <p className="poster-error">{errorMessage}</p> : null}
 
           <div className="poster-source-panel">
-            {imageUrl ? <img ref={imageRef} src={imageUrl} alt="Uploaded source" className="poster-source" onLoad={handleImageLoad} /> : <video ref={videoRef} className="poster-source" muted autoPlay playsInline />}
+            <div className="poster-source-frame" style={{ aspectRatio: sourceAspectRatio }}>
+              {imageUrl ? (
+                <img ref={imageRef} src={imageUrl} alt="Uploaded source" className="poster-source poster-source-image" onLoad={handleImageLoad} />
+              ) : (
+                <video
+                  ref={videoRef}
+                  className="poster-source poster-source-video"
+                  muted
+                  autoPlay
+                  playsInline
+                  onLoadedMetadata={handleVideoMetadata}
+                />
+              )}
+            </div>
           </div>
 
           <canvas ref={sourceCanvasRef} className="poster-hidden-canvas" aria-hidden="true" />
@@ -331,6 +420,30 @@ function cancelAnimationLoop(frameId: number | null) {
   }
 
   window.cancelAnimationFrame(frameId);
+}
+
+function buildAspectRatioValue(width: number, height: number) {
+  if (!width || !height) {
+    return DEFAULT_SOURCE_ASPECT_RATIO;
+  }
+
+  return `${width} / ${height}`;
+}
+
+function playVideo(video: HTMLVideoElement) {
+  try {
+    const playResult = video.play();
+    if (playResult && typeof playResult.catch === 'function') {
+      return playResult.catch(() => {
+        // Ignore autoplay errors; user can still interact to resume playback.
+      });
+    }
+
+    return playResult;
+  } catch {
+    // Ignore missing play implementations in tests or constrained environments.
+    return undefined;
+  }
 }
 
 function stopStream(stream: MediaStream | null) {

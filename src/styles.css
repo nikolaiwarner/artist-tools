@@ -333,6 +333,15 @@ p {
   background: var(--accent-deep);
 }
 
+.icon-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.icon-button:disabled:hover {
+  background: var(--surface-strong);
+}
+
 .poster-file-input {
   position: relative;
   overflow: hidden;
@@ -377,16 +386,29 @@ p {
   gap: 8px;
 }
 
+.poster-source-frame {
+  width: 100%;
+  max-height: min(62vh, 420px);
+  border: 1px solid var(--stroke);
+  border-radius: 4px;
+  background: #f6f6f3;
+  overflow: hidden;
+}
+
 .poster-source-workbench {
   position: relative;
 }
 
 .poster-source {
   width: 100%;
-  max-height: 220px;
-  border: 1px solid var(--stroke);
-  border-radius: 4px;
+  height: 100%;
   background: #f6f6f3;
+  display: block;
+  object-position: center;
+}
+
+.poster-source-video,
+.poster-source-image {
   object-fit: contain;
 }
 
@@ -517,6 +539,10 @@ p {
 
   .poster-tool-layout .tool-hero {
     display: none;
+  }
+
+  .poster-source-frame {
+    max-height: 56vh;
   }
 
   .poster-tool-grid {

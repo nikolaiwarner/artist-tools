@@ -60,9 +60,9 @@ The second tool provides tonal study views from camera input or uploaded image r
 
 - one-stage value study preview with a value-stage toggle (grayscale, then 2-5 tones)
 - grayscale or color toggle for full-color preview or color posterization
-- single camera toggle control via browser media APIs
+- camera controls for start/stop, front/back switching, and pausing on the current frame via browser media APIs
 - image upload fallback when camera is not used
 - save/export of the current filtered output image
-- mobile-first fullscreen viewing with fixed controls
+- mobile-friendly preview sizing that preserves the source aspect ratio
 
 Keep future changes focused on practical composition/value-study workflows for studio use.
