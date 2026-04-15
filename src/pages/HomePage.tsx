@@ -38,11 +38,6 @@ export function HomePage() {
           </Link>
         </article>
 
-        <article className="tool-card muted-card">
-          <p className="tool-index">Next</p>
-          <h2>More studio helpers</h2>
-          <p>The app shell is in place so future tools can slot into the same navigation and layout.</p>
-        </article>
       </div>
     </section>
   );

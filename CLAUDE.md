@@ -20,10 +20,12 @@
 - `.github/workflows/deploy.yml`: GitHub Pages deployment workflow (builds `dist/` and deploys on pushes to `main`)
 - `src/App.tsx`: shared app shell and route table
 - `src/pages/HomePage.tsx`: landing page and tool directory
+- `src/tools/canvas-builder/README.md`: **canonical feature spec** for Canvas Builder
 - `src/tools/canvas-builder/canvasBuilder.ts`: core Canvas Builder calculation logic
 - `src/tools/canvas-builder/CanvasBuilderPage.tsx`: Canvas Builder interface
 - `src/tools/canvas-builder/CanvasPreviewDiagram.tsx`: proportional SVG canvas visualization
 - `src/tools/canvas-builder/*.test.ts*`: tool-level tests
+- `src/tools/posterize-viewer/README.md`: **canonical feature spec** for Camera Tonal Study
 - `src/tools/posterize-viewer/posterize.ts`: grayscale and posterization transformation logic
 - `src/tools/posterize-viewer/PosterizeViewerPage.tsx`: camera/image tonal study interface
 - `src/tools/posterize-viewer/*.test.ts*`: posterization utility and page behavior tests
@@ -42,27 +44,7 @@ When implementing work in this repo:
 
 ## Existing Tools
 
-### Canvas Builder
+Each tool has a `README.md` in its directory that is the **canonical spec** for how that tool should work. Consult it before adding or changing behavior, and update it when behavior changes.
 
-The first tool calculates a supply list for custom canvases, including:
-
-- width and height stretcher bar counts
-- support brace counts using a configurable threshold
-- total wood length in feet
-- fabric cut size and total square footage
-- proportional diagram preview with stretcher bar width, 45-degree mitre corners, dimension labels, and support brace placement
-
-Keep future changes to this tool centered on practical studio planning rather than speculative features.
-
-### Camera Tonal Study
-
-The second tool provides tonal study views from camera input or uploaded image references, including:
-
-- one-stage value study preview with a value-stage toggle (grayscale, then 2-5 tones)
-- grayscale or color toggle for full-color preview or color posterization
-- camera controls for start/stop, front/back switching, and pausing on the current frame via browser media APIs
-- image upload fallback when camera is not used
-- save/export of the current filtered output image
-- mobile-friendly preview sizing that preserves the source aspect ratio
-
-Keep future changes focused on practical composition/value-study workflows for studio use.
+- Canvas Builder: `src/tools/canvas-builder/README.md`
+- Camera Tonal Study: `src/tools/posterize-viewer/README.md`

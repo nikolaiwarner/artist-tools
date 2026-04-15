@@ -151,6 +151,59 @@ describe('PosterizeViewerPage', () => {
     pauseSpy.mockRestore();
   });
 
+  it('keeps poster level and color mode interactive while paused', async () => {
+    const user = userEvent.setup();
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const mockImageData = {
+      data: new Uint8ClampedArray([120, 120, 120, 255]),
+      width: 1,
+      height: 1,
+      colorSpace: 'srgb'
+    } as ImageData;
+    const sourceContext = {
+      drawImage: vi.fn(),
+      getImageData: vi.fn(() => mockImageData)
+    } as unknown as CanvasRenderingContext2D;
+    const stageContext = {
+      putImageData: vi.fn()
+    } as unknown as CanvasRenderingContext2D;
+    const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(function (this: HTMLCanvasElement) {
+      return this.className.includes('poster-hidden-canvas') ? sourceContext : stageContext;
+    });
+
+    const { container } = render(<PosterizeViewerPage />);
+
+    await user.click(screen.getByRole('button', { name: /toggle camera/i }));
+
+    const video = container.querySelector('video');
+    expect(video).not.toBeNull();
+
+    Object.defineProperty(video, 'videoWidth', {
+      configurable: true,
+      value: 720
+    });
+    Object.defineProperty(video, 'videoHeight', {
+      configurable: true,
+      value: 1280
+    });
+
+    fireEvent.loadedMetadata(video as HTMLVideoElement);
+
+    await user.click(screen.getByRole('button', { name: /pause current frame/i }));
+
+    const renderCountAtPause = (stageContext.putImageData as unknown as { mock: { calls: unknown[] } }).mock.calls.length;
+
+    await user.click(screen.getByRole('button', { name: /next value stage/i }));
+    await user.click(screen.getByRole('button', { name: /toggle grayscale or color/i }));
+
+    expect(screen.getByRole('heading', { name: /2 values/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /toggle grayscale or color/i })).toHaveAttribute('aria-pressed', 'true');
+    expect((stageContext.putImageData as unknown as { mock: { calls: unknown[] } }).mock.calls.length).toBeGreaterThan(renderCountAtPause);
+
+    pauseSpy.mockRestore();
+    getContextSpy.mockRestore();
+  });
+
   it('updates the camera preview frame to match the live aspect ratio', async () => {
     const user = userEvent.setup();
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
@@ -176,6 +229,13 @@ describe('PosterizeViewerPage', () => {
     fireEvent.loadedMetadata(video as HTMLVideoElement);
 
     expect(sourceFrame).toHaveStyle({ aspectRatio: '720 / 1280' });
+
+    const videoElement = container.querySelector('video');
+    const videoComputedStyle = window.getComputedStyle(videoElement as HTMLVideoElement);
+    const frameComputedStyle = window.getComputedStyle(sourceFrame as HTMLElement);
+
+    expect(frameComputedStyle.getPropertyValue('aspect-ratio')).toBe('720 / 1280');
+    expect(videoComputedStyle.objectFit).toBe('contain');
 
     getContextSpy.mockRestore();
   });

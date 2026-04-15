@@ -59,10 +59,15 @@ export function PosterizeViewerPage() {
   }, [cameraStatus, cameraPaused, activeStage, renderMode]);
 
   useEffect(() => {
+    if (cameraStatus === 'camera-active' && cameraPaused) {
+      renderFrameFromVideo(videoRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+      return;
+    }
+
     if (cameraStatus === 'image-mode') {
       renderFrameFromImage(imageRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
     }
-  }, [cameraStatus, activeStage, renderMode]);
+  }, [cameraStatus, cameraPaused, activeStage, renderMode]);
 
   async function handleStartCamera(nextFacingMode = cameraFacingMode) {
     const mediaDevices = navigator.mediaDevices;
@@ -153,6 +158,8 @@ export function PosterizeViewerPage() {
   function handleVideoMetadata(event: SyntheticEvent<HTMLVideoElement>) {
     const video = event.currentTarget;
     setSourceAspectRatio(buildAspectRatioValue(video.videoWidth, video.videoHeight));
+    video.setAttribute('width', String(video.videoWidth));
+    video.setAttribute('height', String(video.videoHeight));
     renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
   }
 

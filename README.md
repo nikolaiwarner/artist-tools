@@ -76,7 +76,7 @@ Current output includes:
 
 - a color toggle that shows full color on the base stage and color posterization on posterized stages
 - a value-stage toggle that cycles between grayscale and posterized 2, 3, 4, and 5 tone steps
-- camera controls for start/stop, front/back switching, and pausing on the current frame
+- camera controls for start/stop, front/back switching, and pausing on the current frame while still allowing stage/color adjustments
 - image upload support for still references
 - save button for exporting the current filtered output as an image
 - mobile-friendly preview sizing that preserves the live camera aspect ratio without stretching
