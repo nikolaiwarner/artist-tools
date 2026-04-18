@@ -641,3 +641,193 @@ p {
     border-radius: 0;
   }
 }
+
+/* ── Art Pricing Calculator ──────────────────────────────────── */
+
+.pricing-fieldset {
+  border: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.pricing-legend {
+  font-size: 0.72rem;
+  font-family: 'IBM Plex Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.pricing-advanced {
+  padding: 10px;
+  background: #f6f6f3;
+  border-radius: 4px;
+  border: 1px solid var(--stroke);
+  margin-bottom: 8px;
+}
+
+.pricing-toggle-btn {
+  width: 100%;
+  text-align: left;
+  margin-bottom: 8px;
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+.pricing-helper {
+  margin-bottom: 8px;
+  font-size: 0.84rem;
+  font-style: italic;
+}
+
+.pricing-select {
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  color: #171717;
+  font: inherit;
+  font-size: 0.9rem;
+}
+
+.pricing-select:focus {
+  outline: 2px solid rgba(15, 78, 58, 0.2);
+  border-color: var(--accent);
+}
+
+.pricing-price-block {
+  padding: 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #f2fbf8;
+  text-align: center;
+}
+
+.pricing-label {
+  margin: 0 0 4px;
+  font-size: 0.76rem;
+  font-family: 'IBM Plex Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(242, 251, 248, 0.7);
+}
+
+.pricing-price {
+  margin: 0;
+  font-size: clamp(2rem, 5vw, 3rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #f2fbf8;
+  line-height: 1.1;
+}
+
+.pricing-breakdown {
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--stroke);
+  background: #fafaf8;
+}
+
+.pricing-breakdown h2 {
+  font-size: 0.86rem;
+  font-family: 'IBM Plex Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+}
+
+.pricing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.pricing-table td {
+  padding: 4px 0;
+  color: var(--ink-soft);
+}
+
+.pricing-table td:last-child {
+  text-align: right;
+  color: #171717;
+}
+
+.pricing-row-total td {
+  border-top: 1px solid var(--stroke);
+  padding-top: 6px;
+  font-weight: 500;
+  color: #171717;
+}
+
+.pricing-floor-note {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.pricing-formula {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+}
+
+.pricing-formula summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 0.82rem;
+}
+
+.pricing-formula-code {
+  margin: 6px 0 0;
+  padding: 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  background: #f0f0ec;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.pricing-placeholder {
+  color: var(--ink-soft);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.pricing-reverse-result {
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid var(--stroke);
+  background: #fafaf8;
+  border-left: 4px solid var(--accent);
+}
+
+.pricing-reverse-result h2 {
+  font-size: 0.86rem;
+  font-family: 'IBM Plex Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin: 0 0 8px;
+}
+
+.pricing-reverse-dims {
+  font-size: clamp(1.2rem, 3vw, 1.7rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+  margin: 0 0 4px;
+}
+
+.pricing-reverse-area,
+.pricing-reverse-verify {
+  margin: 2px 0 0;
+  font-size: 0.84rem;
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--ink-soft);
+}

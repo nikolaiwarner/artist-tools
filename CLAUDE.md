@@ -29,6 +29,10 @@
 - `src/tools/posterize-viewer/posterize.ts`: grayscale and posterization transformation logic
 - `src/tools/posterize-viewer/PosterizeViewerPage.tsx`: camera/image tonal study interface
 - `src/tools/posterize-viewer/*.test.ts*`: posterization utility and page behavior tests
+- `src/tools/art-pricing/README.md`: **canonical feature spec** for Art Pricing Calculator
+- `src/tools/art-pricing/artPricing.ts`: price calculation and reverse-calculation logic
+- `src/tools/art-pricing/ArtPricingPage.tsx`: art pricing interface
+- `src/tools/art-pricing/*.test.ts*`: pricing logic and page behavior tests
 - `src/styles.css`: global styling and responsive layout
 
 ## Development Workflow
@@ -48,3 +52,4 @@ Each tool has a `README.md` in its directory that is the **canonical spec** for 
 
 - Canvas Builder: `src/tools/canvas-builder/README.md`
 - Camera Tonal Study: `src/tools/posterize-viewer/README.md`
+- Art Pricing Calculator: `src/tools/art-pricing/README.md`

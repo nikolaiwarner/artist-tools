@@ -38,6 +38,18 @@ export function HomePage() {
           </Link>
         </article>
 
+        <article className="tool-card featured-card">
+          <p className="tool-index">03</p>
+          <h2>Art Pricing Calculator</h2>
+          <p>
+            Estimate a selling price from time, dimensions, and materials. Includes a reverse
+            calculator to find canvas dimensions for a target price.
+          </p>
+          <Link to="/tools/art-pricing" className="tool-link">
+            Open tool
+          </Link>
+        </article>
+
       </div>
     </section>
   );

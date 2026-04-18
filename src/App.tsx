@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
 
 import { HomePage } from './pages/HomePage';
+import { ArtPricingPage } from './tools/art-pricing/ArtPricingPage';
 import { CanvasBuilderPage } from './tools/canvas-builder/CanvasBuilderPage';
 import { PosterizeViewerPage } from './tools/posterize-viewer/PosterizeViewerPage';
 
@@ -17,6 +18,7 @@ export default function App() {
           </NavLink>
           <NavLink to="/tools/canvas-builder">Canvas Builder</NavLink>
           <NavLink to="/tools/posterize-viewer">Tonal Study</NavLink>
+          <NavLink to="/tools/art-pricing">Art Pricing</NavLink>
         </nav>
       </header>
 
@@ -25,6 +27,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/tools/canvas-builder" element={<CanvasBuilderPage />} />
           <Route path="/tools/posterize-viewer" element={<PosterizeViewerPage />} />
+          <Route path="/tools/art-pricing" element={<ArtPricingPage />} />
         </Routes>
       </main>
     </div>
