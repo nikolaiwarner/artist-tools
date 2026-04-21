@@ -2,13 +2,22 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
+import { AppShellProvider } from '../../components/AppShellContext';
 import { CanvasBuilderPage } from './CanvasBuilderPage';
+
+function renderPage() {
+  return render(
+    <AppShellProvider value={{ menuOpen: false, openMenu: () => { }, closeMenu: () => { } }}>
+      <CanvasBuilderPage />
+    </AppShellProvider>
+  );
+}
 
 describe('CanvasBuilderPage', () => {
   it('renders a live shopping list from artist inputs', async () => {
     const user = userEvent.setup();
 
-    render(<CanvasBuilderPage />);
+    renderPage();
 
     const widthInput = screen.getByLabelText(/canvas width/i);
     const heightInput = screen.getByLabelText(/canvas height/i);
@@ -30,7 +39,7 @@ describe('CanvasBuilderPage', () => {
   it('renders a live scale diagram with dimension labels', async () => {
     const user = userEvent.setup();
 
-    render(<CanvasBuilderPage />);
+    renderPage();
 
     const widthInput = screen.getByLabelText(/canvas width/i);
     const heightInput = screen.getByLabelText(/canvas height/i);
@@ -48,7 +57,7 @@ describe('CanvasBuilderPage', () => {
   it('shows one or two support braces in the diagram based on threshold rules', async () => {
     const user = userEvent.setup();
 
-    const { container } = render(<CanvasBuilderPage />);
+    const { container } = renderPage();
 
     const widthInput = screen.getByLabelText(/canvas width/i);
     const heightInput = screen.getByLabelText(/canvas height/i);
@@ -69,7 +78,7 @@ describe('CanvasBuilderPage', () => {
   it('shows stretcher bar width and four mitre cuts in the diagram', async () => {
     const user = userEvent.setup();
 
-    const { container } = render(<CanvasBuilderPage />);
+    const { container } = renderPage();
 
     expect(screen.getByText(/1\.5 in bar width/i)).toBeInTheDocument();
     expect(container.querySelectorAll('[data-testid="mitre-cut"]')).toHaveLength(4);

@@ -1,16 +1,22 @@
 import { Link } from 'react-router-dom';
+import { AppMenuButton } from '../components/AppMenuButton';
 
 export function HomePage() {
   return (
     <section className="home-layout">
       <div className="hero-card">
-        <p className="eyebrow">Studio utilities</p>
-        <h1>Artist Tools</h1>
-        <p>
-          A lightweight collection of browser-based studio helpers. Each tool lives on its
-          own page, stores its own state locally, and is designed for quick use during real
-          project planning.
-        </p>
+        <div className="hero-card-head">
+          <AppMenuButton />
+          <div className="hero-card-copy">
+            <p className="eyebrow">Studio utilities</p>
+            <h1>Artist Tools</h1>
+            <p>
+              A lightweight collection of browser-based studio helpers. Each tool lives on its
+              own page, stores its own state locally, and is designed for quick use during real
+              project planning.
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="tool-card-grid">
@@ -46,6 +52,18 @@ export function HomePage() {
             calculator to find canvas dimensions for a target price.
           </p>
           <Link to="/tools/art-pricing" className="tool-link">
+            Open tool
+          </Link>
+        </article>
+
+        <article className="tool-card featured-card">
+          <p className="tool-index">04</p>
+          <h2>Reference Board</h2>
+          <p>
+            An infinite canvas for organizing reference images. Arrange, transform, and annotate
+            images across multiple projects — stored locally in your browser.
+          </p>
+          <Link to="/tools/reference-board" className="tool-link">
             Open tool
           </Link>
         </article>

@@ -2,17 +2,26 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
+import { AppShellProvider } from '../../components/AppShellContext';
 import { ArtPricingPage } from './ArtPricingPage';
+
+function renderPage() {
+  return render(
+    <AppShellProvider value={{ menuOpen: false, openMenu: () => { }, closeMenu: () => { } }}>
+      <ArtPricingPage />
+    </AppShellProvider>
+  );
+}
 
 describe('ArtPricingPage', () => {
   it('renders without crashing', () => {
-    render(<ArtPricingPage />);
+    renderPage();
 
     expect(screen.getByRole('heading', { name: /art pricing calculator/i })).toBeInTheDocument();
   });
 
   it('shows a placeholder prompt when dimensions and time are empty', () => {
-    render(<ArtPricingPage />);
+    renderPage();
 
     expect(screen.getByText(/enter time and dimensions/i)).toBeInTheDocument();
   });
@@ -20,7 +29,7 @@ describe('ArtPricingPage', () => {
   it('displays a calculated price when time, width and height are filled in', async () => {
     const user = userEvent.setup();
 
-    render(<ArtPricingPage />);
+    renderPage();
 
     await user.clear(screen.getByLabelText(/time spent/i));
     await user.type(screen.getByLabelText(/time spent/i), '2');
@@ -36,7 +45,7 @@ describe('ArtPricingPage', () => {
   it('shows the advanced section only after toggle', async () => {
     const user = userEvent.setup();
 
-    render(<ArtPricingPage />);
+    renderPage();
 
     expect(screen.queryByLabelText(/hourly rate/i)).not.toBeInTheDocument();
 
@@ -48,7 +57,7 @@ describe('ArtPricingPage', () => {
   it('shows the reverse calculator only after toggle', async () => {
     const user = userEvent.setup();
 
-    render(<ArtPricingPage />);
+    renderPage();
 
     expect(screen.queryByLabelText(/target price/i)).not.toBeInTheDocument();
 

@@ -1,6 +1,7 @@
 import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, CameraOff, Download, ImagePlus, Layers3, Palette, Pause, Play, RefreshCcw } from 'lucide-react';
 
+import { AppMenuButton } from '../../components/AppMenuButton';
 import { applyPosterStageToImageData, buildPosterStages, type PosterRenderMode, type PosterStage } from './posterize';
 
 type CameraStatus = 'camera-off' | 'camera-active' | 'image-mode' | 'camera-error';
@@ -227,8 +228,13 @@ export function PosterizeViewerPage() {
   return (
     <section className="tool-layout poster-tool-layout">
       <div className="tool-hero">
-        <h1>Value Study</h1>
-        <p>View live camera feed or an uploaded image as grayscale or full color, plus 2-5 value posterized studies.</p>
+        <div className="tool-hero-head">
+          <AppMenuButton />
+          <div className="tool-hero-copy">
+            <h1>Value Study</h1>
+            <p>View live camera feed or an uploaded image as grayscale or full color, plus 2-5 value posterized studies.</p>
+          </div>
+        </div>
       </div>
 
       <div className="poster-tool-grid">

@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useState } from 'react';
 
+import { AppMenuButton } from '../../components/AppMenuButton';
 import {
   calculatePrice,
   calculateReversePrice,
@@ -92,7 +93,12 @@ export function ArtPricingPage() {
   return (
     <section className="tool-layout">
       <div className="tool-hero">
-        <h1>Art Pricing Calculator</h1>
+        <div className="tool-hero-head">
+          <AppMenuButton />
+          <div className="tool-hero-copy">
+            <h1>Art Pricing Calculator</h1>
+          </div>
+        </div>
       </div>
 
       <div className="builder-grid">

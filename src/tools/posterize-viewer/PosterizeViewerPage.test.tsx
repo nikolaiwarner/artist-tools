@@ -2,7 +2,16 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AppShellProvider } from '../../components/AppShellContext';
 import { PosterizeViewerPage } from './PosterizeViewerPage';
+
+function renderPage() {
+  return render(
+    <AppShellProvider value={{ menuOpen: false, openMenu: () => { }, closeMenu: () => { } }}>
+      <PosterizeViewerPage />
+    </AppShellProvider>
+  );
+}
 
 describe('PosterizeViewerPage', () => {
   const stopTrack = vi.fn();
@@ -25,7 +34,7 @@ describe('PosterizeViewerPage', () => {
 
     playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
     toDataUrlSpy = vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,AAAA');
-    anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => { });
   });
 
   afterEach(() => {
@@ -35,7 +44,7 @@ describe('PosterizeViewerPage', () => {
   });
 
   it('renders icon controls and a single active stage', () => {
-    render(<PosterizeViewerPage />);
+    renderPage();
 
     expect(screen.getByRole('heading', { level: 1, name: /value study/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /toggle camera/i })).toBeInTheDocument();
@@ -53,7 +62,7 @@ describe('PosterizeViewerPage', () => {
   it('uses one button to start and stop camera capture', async () => {
     const user = userEvent.setup();
 
-    render(<PosterizeViewerPage />);
+    renderPage();
 
     await user.click(screen.getByRole('button', { name: /toggle camera/i }));
 
@@ -75,7 +84,7 @@ describe('PosterizeViewerPage', () => {
   it('switches between back and front camera streams', async () => {
     const user = userEvent.setup();
 
-    render(<PosterizeViewerPage />);
+    renderPage();
 
     await user.click(screen.getByRole('button', { name: /toggle camera/i }));
     await user.click(screen.getByRole('button', { name: /switch front or back camera/i }));
@@ -100,7 +109,7 @@ describe('PosterizeViewerPage', () => {
   it('cycles value stage, toggles color mode, and saves current output', async () => {
     const user = userEvent.setup();
 
-    render(<PosterizeViewerPage />);
+    renderPage();
 
     await user.click(screen.getByRole('button', { name: /next value stage/i }));
     expect(screen.getByRole('heading', { name: /2 values/i })).toBeInTheDocument();
@@ -122,7 +131,7 @@ describe('PosterizeViewerPage', () => {
   it('cycles value stage when the study preview is tapped', async () => {
     const user = userEvent.setup();
 
-    render(<PosterizeViewerPage />);
+    renderPage();
 
     await user.click(screen.getByRole('button', { name: /study preview/i }));
     expect(screen.getByRole('heading', { name: /2 values/i })).toBeInTheDocument();
@@ -133,9 +142,9 @@ describe('PosterizeViewerPage', () => {
 
   it('pauses and resumes the current camera frame', async () => {
     const user = userEvent.setup();
-    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => { });
 
-    render(<PosterizeViewerPage />);
+    renderPage();
 
     await user.click(screen.getByRole('button', { name: /toggle camera/i }));
     await user.click(screen.getByRole('button', { name: /pause current frame/i }));
@@ -153,7 +162,7 @@ describe('PosterizeViewerPage', () => {
 
   it('keeps poster level and color mode interactive while paused', async () => {
     const user = userEvent.setup();
-    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const pauseSpy = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => { });
     const mockImageData = {
       data: new Uint8ClampedArray([120, 120, 120, 255]),
       width: 1,
@@ -171,7 +180,7 @@ describe('PosterizeViewerPage', () => {
       return this.className.includes('poster-hidden-canvas') ? sourceContext : stageContext;
     });
 
-    const { container } = render(<PosterizeViewerPage />);
+    const { container } = renderPage();
 
     await user.click(screen.getByRole('button', { name: /toggle camera/i }));
 
@@ -207,7 +216,7 @@ describe('PosterizeViewerPage', () => {
   it('updates the camera preview frame to match the live aspect ratio', async () => {
     const user = userEvent.setup();
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
-    const { container } = render(<PosterizeViewerPage />);
+    const { container } = renderPage();
 
     await user.click(screen.getByRole('button', { name: /toggle camera/i }));
 

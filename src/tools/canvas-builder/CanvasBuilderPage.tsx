@@ -1,5 +1,6 @@
 import { ChangeEvent, useEffect, useState } from 'react';
 
+import { AppMenuButton } from '../../components/AppMenuButton';
 import { buildCanvasPlan, defaultCanvasInput, type CanvasPlanInput } from './canvasBuilder';
 import { CanvasPreviewDiagram } from './CanvasPreviewDiagram';
 
@@ -38,7 +39,12 @@ export function CanvasBuilderPage() {
   return (
     <section className="tool-layout">
       <div className="tool-hero">
-        <h1>Canvas Builder</h1>
+        <div className="tool-hero-head">
+          <AppMenuButton />
+          <div className="tool-hero-copy">
+            <h1>Canvas Builder</h1>
+          </div>
+        </div>
       </div>
 
       <div className="builder-grid">

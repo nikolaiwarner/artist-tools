@@ -2,7 +2,7 @@
 
 Artist Tools is a browser-based React app for small studio utilities. It has no backend, stores tool state locally in the browser when useful, and is structured so each tool can live on its own route behind a shared app shell.
 
-The project currently ships with Canvas Builder and Camera Tonal Study, and is set up for deployment to GitHub Pages.
+The project ships with Canvas Builder, Camera Tonal Study, Art Pricing Calculator, and Reference Board (an infinite-canvas reference image board), and is set up for deployment to GitHub Pages.
 
 ## Stack
 
@@ -11,8 +11,12 @@ The project currently ships with Canvas Builder and Camera Tonal Study, and is s
 - Vite
 - React Router with hash-based routing for GitHub Pages compatibility
 - Lucide React for UI icons
+- react-konva + konva for HTML Canvas rendering (used by Reference Board)
+- idb for IndexedDB access (used by Reference Board)
+- use-image hook for async image loading in Konva
 - Vitest and Testing Library for TDD
-- Local storage for persistence
+- fake-indexeddb for IndexedDB support in tests
+- Local storage for persistence (IndexedDB for Reference Board images + layers)
 
 ## Available Scripts
 
@@ -46,9 +50,13 @@ If the repository name changes, update the production base path in `vite.config.
 ## App Structure
 
 - `src/App.tsx` contains the shared app shell and route definitions
+- `src/components/AppShellContext.tsx` exposes shared app-shell controls such as opening and closing the tool drawer
+- `src/components/AppMenuButton.tsx` provides the reusable menu trigger used on top-level pages
 - `src/pages/HomePage.tsx` contains the landing page and tool index
 - `src/tools/canvas-builder/` contains the first tool UI, calculator logic, diagram component, and tests
 - `src/tools/posterize-viewer/` contains camera/image tonal study rendering logic, UI, and tests
+- `src/tools/art-pricing/` contains price calculation and reverse-calculation logic, UI, and tests
+- `src/tools/reference-board/` contains the Reference Board infinite canvas tool (types, project logic, IndexedDB layer, canvas components, tests)
 - `src/styles.css` contains a compact, barebones visual system tuned to maximize tool workspace
 
 ## Tools
@@ -81,10 +89,34 @@ Current output includes:
 - save button for exporting the current filtered output as an image
 - mobile-friendly preview sizing that preserves the live camera aspect ratio without stretching
 
+### Art Pricing Calculator
+
+Art Pricing Calculator helps artists estimate a selling price based on time, canvas dimensions, materials, and complexity. Includes a reverse calculator that finds canvas dimensions for a target price.
+
+### Reference Board
+
+Reference Board is an infinite-canvas reference image board. Create projects, import images, arrange and transform them on a freely pannable/zoomable canvas, and annotate with text layers.
+
+Key features:
+- Multiple named projects, each with its own canvas
+- Optional project pinning so selected boards always sort to the top of the projects list
+- Auto-generated project thumbnails and per-project total storage estimates on cards (localStorage metadata/thumbnail + IndexedDB layer/image data)
+- Pan (scroll / space+drag) and zoom (ctrl+scroll / trackpad pinch)
+- Import images via toolbar button or drag-and-drop
+- Per-project canvas background color picker in the toolbar (persisted locally)
+- Rotate/scale via canvas handles, plus flip H/V, opacity, non-destructive crop per image layer
+- Duplicating image layers reuses the same stored image data (no duplicate image blob writes)
+- Text layers with font, size, bold/italic, color, and alignment controls
+- Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
+- Images stored in IndexedDB; project metadata stored in localStorage
+
 ## UI Direction
 
 - The interface uses a compact, barebones visual style with dense spacing and minimal decoration.
 - Layout decisions prioritize showing tool inputs, output, and diagrams with as little chrome as possible.
+- Global navigation is intentionally hidden until requested through a slide-out drawer rather than a persistent top nav.
+- The menu trigger belongs to the left side of the top-level page hero so navigation is available without consuming permanent workspace.
+- Subpages inside tools should avoid repeating the global menu trigger when that chrome would compete with the working surface.
 - The shared shell and tool pages stay responsive for both desktop and mobile while preserving screen real estate.
 
 ## Testing Approach
