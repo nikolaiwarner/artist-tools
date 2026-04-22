@@ -1149,6 +1149,13 @@ p {
   background: var(--surface-strong);
 }
 
+@media (max-width: 780px) {
+  .refboard-toolbar-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
 .refboard-project-title {
   font-weight: 600;
   font-size: 0.94rem;
@@ -1402,6 +1409,14 @@ p {
   background: #f1f1ee;
 }
 
+@media (max-width: 780px) {
+  .refboard-icon-btn {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 8px;
+  }
+}
+
 /* Opacity slider */
 
 .refboard-slider-row {
@@ -1538,12 +1553,60 @@ p {
     height: calc(100vh - 52px);
   }
 
+  .refboard-editor-body {
+    flex-direction: column;
+  }
+
+  /* Layer panel becomes a bottom drawer on mobile */
   .refboard-layer-panel {
-    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 50vh;
+    border-radius: 12px 12px 0 0;
+    border: 1px solid var(--stroke);
+    border-bottom: none;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+  }
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  .refboard-layer-panel::before {
+    content: '';
+    height: 4px;
+    background: var(--stroke);
+    border-radius: 2px;
+    align-self: center;
+    margin: 8px 0;
+    width: 40px;
   }
 
   .refboard-multi-select-panel {
-    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-height: 50vh;
+    border-radius: 12px 12px 0 0;
+    border: 1px solid var(--stroke);
+    border-bottom: none;
+    z-index: 100;
+    animation: slideUp 0.3s ease-out;
   }
 
   .refboard-toolbar {

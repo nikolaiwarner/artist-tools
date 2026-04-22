@@ -347,6 +347,7 @@ function ImageNode({
   onContextMenu,
 }: ImageNodeProps) {
   const nodeRef = useRef<Konva.Image>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataUrl = imageCache.get(layer.imageId) ?? '';
   const [img] = useImage(dataUrl);
 
@@ -356,6 +357,37 @@ function ImageNode({
       transformerRef.current.getLayer()?.batchDraw();
     }
   }, [isSelected, transformerRef]);
+
+  const handleTouchStart = () => {
+    // Start long-press timer (500ms)
+    longPressTimerRef.current = setTimeout(() => {
+      const node = nodeRef.current;
+      if (node) {
+        const stage = node.getStage();
+        if (stage) {
+          const pointerPos = stage.getPointerPosition();
+          if (pointerPos) {
+            // Create a synthetic context menu event
+            const evt = new MouseEvent('contextmenu', {
+              bubbles: true,
+              cancelable: true,
+              clientX: pointerPos.x,
+              clientY: pointerPos.y,
+            });
+            // Trigger context menu handler
+            onContextMenu({ evt } as Konva.KonvaEventObject<MouseEvent>);
+          }
+        }
+      }
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   const scaleX = layer.scaleX * (layer.flipX ? -1 : 1);
   const scaleY = layer.scaleY * (layer.flipY ? -1 : 1);
@@ -387,6 +419,8 @@ function ImageNode({
       draggable
       onClick={onClick}
       onTap={onTap}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       onDragStart={onDragStart}
       onDragMove={(e) => onDragMove(e.target.x(), e.target.y())}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
@@ -443,6 +477,7 @@ function TextNode({
   onContextMenu,
 }: TextNodeProps) {
   const nodeRef = useRef<Konva.Text>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isSelected && transformerRef.current && nodeRef.current) {
@@ -450,6 +485,37 @@ function TextNode({
       transformerRef.current.getLayer()?.batchDraw();
     }
   }, [isSelected, transformerRef]);
+
+  const handleTouchStart = () => {
+    // Start long-press timer (500ms)
+    longPressTimerRef.current = setTimeout(() => {
+      const node = nodeRef.current;
+      if (node) {
+        const stage = node.getStage();
+        if (stage) {
+          const pointerPos = stage.getPointerPosition();
+          if (pointerPos) {
+            // Create a synthetic context menu event
+            const evt = new MouseEvent('contextmenu', {
+              bubbles: true,
+              cancelable: true,
+              clientX: pointerPos.x,
+              clientY: pointerPos.y,
+            });
+            // Trigger context menu handler
+            onContextMenu({ evt } as Konva.KonvaEventObject<MouseEvent>);
+          }
+        }
+      }
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
 
   const fontStyle = [layer.italic ? 'italic' : '', layer.bold ? 'bold' : '']
     .filter(Boolean)
@@ -477,6 +543,8 @@ function TextNode({
       onTap={onTap}
       onDblClick={onDblClick}
       onDblTap={onDblClick}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
       onDragStart={onDragStart}
       onDragMove={(e) => onDragMove(e.target.x(), e.target.y())}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}

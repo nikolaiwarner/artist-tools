@@ -18,6 +18,23 @@ interface CanvasStageProps {
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 10;
 
+// Helper function to calculate distance between two points
+function getDistance(p1: { x: number; y: number }, p2: { x: number; y: number }): number {
+  const dx = p1.x - p2.x;
+  const dy = p1.y - p2.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Helper function to get the center point between two touches
+function getTouchCenter(touches: React.TouchList): { x: number; y: number } {
+  const touch1 = touches[0];
+  const touch2 = touches[1];
+  return {
+    x: (touch1.clientX + touch2.clientX) / 2,
+    y: (touch1.clientY + touch2.clientY) / 2,
+  };
+}
+
 export function CanvasStage({
   viewport,
   onViewportChange,
@@ -35,6 +52,10 @@ export function CanvasStage({
   const isPanningRef = useRef(false);
   const lastPosRef = useRef({ x: 0, y: 0 });
   const spaceDownRef = useRef(false);
+
+  // Touch gesture tracking
+  const touchesRef = useRef<React.TouchList | null>(null);
+  const lastTouchDistanceRef = useRef(0);
 
   // Wheel zoom (ctrl/cmd + scroll or trackpad pinch)
   const handleWheel = useCallback(
@@ -126,6 +147,96 @@ export function CanvasStage({
     onSelectionEnd?.();
   }, [onSelectionEnd]);
 
+  // Touch gesture handlers for mobile pinch-zoom and pan
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      touchesRef.current = e.touches;
+
+      if (e.touches.length === 2) {
+        // Start of pinch or two-finger pan
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        lastTouchDistanceRef.current = getDistance(
+          { x: touch1.clientX, y: touch1.clientY },
+          { x: touch2.clientX, y: touch2.clientY }
+        );
+        lastPosRef.current = getTouchCenter(e.touches);
+      } else if (e.touches.length === 1) {
+        // Single touch - let Konva handle it
+        lastPosRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      }
+    },
+    []
+  );
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      touchesRef.current = e.touches;
+
+      if (e.touches.length === 2) {
+        // Two-finger gesture: pinch zoom or pan
+        const touch1 = e.touches[0];
+        const touch2 = e.touches[1];
+        const currentDistance = getDistance(
+          { x: touch1.clientX, y: touch1.clientY },
+          { x: touch2.clientX, y: touch2.clientY }
+        );
+        const currentCenter = getTouchCenter(e.touches);
+
+        // Detect pinch zoom
+        const distanceDelta = currentDistance - lastTouchDistanceRef.current;
+        if (Math.abs(distanceDelta) > 5) {
+          // Significant pinch movement detected
+          const stage = stageRef.current;
+          if (stage) {
+            const oldScale = stage.scaleX();
+            const zoomFactor = currentDistance / lastTouchDistanceRef.current;
+            const newScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, oldScale * zoomFactor));
+
+            // Calculate zoom center (convert screen coords to canvas coords)
+            const stageBox = stage.getStage().container().getBoundingClientRect();
+            const pointerPos = {
+              x: currentCenter.x - stageBox.left,
+              y: currentCenter.y - stageBox.top,
+            };
+
+            const mousePointTo = {
+              x: (pointerPos.x - stage.x()) / oldScale,
+              y: (pointerPos.y - stage.y()) / oldScale,
+            };
+
+            const newPos = {
+              x: pointerPos.x - mousePointTo.x * newScale,
+              y: pointerPos.y - mousePointTo.y * newScale,
+            };
+
+            onViewportChange({ x: newPos.x, y: newPos.y, scale: newScale });
+            lastTouchDistanceRef.current = currentDistance;
+          }
+        } else {
+          // Two-finger pan (small or no distance change, but center moved)
+          const dx = currentCenter.x - lastPosRef.current.x;
+          const dy = currentCenter.y - lastPosRef.current.y;
+          if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+            onViewportChange({
+              x: viewport.x + dx,
+              y: viewport.y + dy,
+              scale: viewport.scale,
+            });
+            lastPosRef.current = currentCenter;
+          }
+        }
+      }
+    },
+    [viewport, onViewportChange, stageRef]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    touchesRef.current = null;
+    lastTouchDistanceRef.current = 0;
+  }, []);
+
   // Space key for pan mode
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -163,7 +274,15 @@ export function CanvasStage({
   }
 
   return (
-    <div ref={containerRef} className="refboard-canvas-container" onContextMenu={handleContextMenu}>
+    <div
+      ref={containerRef}
+      className="refboard-canvas-container"
+      onContextMenu={handleContextMenu}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{ touchAction: 'none' }} // Prevent browser touch scrolling/zoom
+    >
       <Stage
         ref={stageRef as React.RefObject<Konva.Stage>}
         width={containerRef.current?.clientWidth ?? window.innerWidth}

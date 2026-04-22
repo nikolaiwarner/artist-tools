@@ -15,6 +15,8 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - All project metadata is stored in `localStorage` under `artist-tools.reference-board.projects`
 
 ### Canvas
+
+#### Desktop Controls
 - Pan: scroll / space+drag / middle-mouse drag
 - Zoom: ctrl+scroll / trackpad pinch
 - The canvas editor is treated as a focused subpage and intentionally omits the shared app menu trigger to preserve working area
@@ -36,30 +38,66 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - Multi-selection can be deleted with Delete/Backspace or the multi-select panel action
 - Clicking empty canvas deselects all layers
 
+#### Mobile Touch Controls
+- **Pan**: Two-finger drag to pan around the canvas
+- **Zoom**: Two-finger pinch gesture to zoom in/out
+- **Layer Selection**: Tap to select a layer; tap empty canvas to deselect
+- **Layer Context Menu**: Long-press (hold for 500ms) on a layer to open the context menu with layer actions
+- **Right-click menu**: On desktop, right-click a layer to open the context menu; on mobile/touch devices, use long-press
+- **Layer Panel**: Appears as a bottom drawer on mobile devices when a layer is selected, allowing full editing of layer properties
+- **Touch Targets**: All buttons are optimized for touch with 44×44px minimum size on mobile
+
 ### Image Layers
 - Import via the **image icon** toolbar button or drag-and-drop
-- Clipboard image paste (Ctrl/Cmd+V) creates a new image layer from pasted image data
+- On mobile, tap the image icon or drag a file from another app onto the canvas
+- Clipboard image paste (Ctrl/Cmd+V on desktop; paste after copying an image on mobile) creates a new image layer from pasted image data
 - Images are compressed for web (max 2400px, JPEG quality 0.85) on import
 - Duplicating an image layer reuses the same stored image data; only a new layer record is created
-- Click to select; click empty canvas to deselect
-- Drag to reposition
-- Konva Transformer handles on the selected layer for visual scale + rotate
-- Layer panel controls:
+- Click/tap to select; click/tap empty canvas to deselect
+- Drag to reposition (single finger on mobile, click+drag on desktop)
+- **Desktop**: Konva Transformer handles on the selected layer for visual scale + rotate
+- **Mobile**: Transformer handles are supported via touch; pinch and rotate gestures available
+- **Layer panel** (opens as bottom drawer on mobile):
   - Flip horizontal / Flip vertical (icon buttons)
   - Opacity slider (0–100%)
   - Non-destructive crop: drag-handle overlay directly on canvas with rule-of-thirds grid lines; original image data is never modified
 
 ### Text Layers
 - Add via **text icon** toolbar button
-- Click to select; double-click to edit in-place (HTML textarea overlay)
-- Layer panel controls: font size, font family, bold/italic, text color, alignment, opacity slider
+- Click/tap to select; double-click/double-tap to edit in-place (HTML textarea overlay)
+- **Layer panel** (opens as bottom drawer on mobile):
+  - Font size, font family, bold/italic, text color, alignment, opacity slider
 
 ### Layer Ordering
-- Right-click (or long press on touch) opens context menu: Bring to Front, Bring Forward, Send Backward, Send to Back
+- **Desktop**: Right-click (or long press on touch) opens context menu: Bring to Front, Bring Forward, Send Backward, Send to Back
+- **Mobile**: Long-press (hold 500ms) on a layer to open context menu with the same layer ordering options
 - Context menu also provides Delete and Duplicate
 - Layer panel provides duplicate (copy icon) and delete (trash icon) buttons
 
-### Storage
+### Mobile-First Experience
+
+Reference Board is designed with first-class support for both desktop and mobile/tablet devices (iOS, iPadOS, Android):
+
+### Gesture Support
+- **Pinch Zoom**: Two-finger pinch gesture to zoom in/out with smooth scaling
+- **Two-Finger Pan**: Move around the canvas by dragging with two fingers
+- **Single-Finger Drag**: Move layers around the canvas
+- **Long-Press**: Hold on a layer for 500ms to open the context menu (replaces right-click on touch devices)
+- **Double-Tap**: Double-tap text layers to edit them
+
+### Mobile UI Adaptations
+- **Responsive Layout**: On screens narrower than 780px, the layer panel appears as a bottom drawer instead of a side panel, maximizing visible canvas space
+- **Touch-Optimized Buttons**: All toolbar and control buttons are 44×44px minimum on mobile for comfortable touch targets
+- **Drawer Animation**: Layer panel slides up from the bottom with smooth animation on mobile
+- **Landscape/Portrait**: Works in both orientations with responsive canvas sizing
+- **Viewport Optimization**: Touch scroll is disabled (`touch-action: none`) to allow custom canvas pan/zoom gestures
+
+### Files & Image Import on Mobile
+- Tap the **image icon** in the toolbar to open file picker
+- Drag & drop images from file manager or other apps
+- Copy images from Photos app and paste them onto the canvas
+
+## Storage
 - **localStorage**: project metadata list (`ProjectMeta[]`)
 - **IndexedDB** (`reference-board` database): image dataUrls (keyed by `imageId`) and layer objects (keyed by `layerId`, indexed by `projectId`)
 - Shared `imageId` references are counted once in storage estimates
