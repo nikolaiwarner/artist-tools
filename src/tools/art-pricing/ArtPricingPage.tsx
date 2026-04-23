@@ -1,6 +1,7 @@
-import { ChangeEvent, useEffect, useState } from 'react';
+import { ChangeEvent, useState } from 'react';
 
 import { AppMenuButton } from '../../components/AppMenuButton';
+import { useSyncedLocalStorage } from '../../sync/useSyncedLocalStorage';
 import {
   calculatePrice,
   calculateReversePrice,
@@ -26,27 +27,15 @@ const defaultReverseInput: ReverseInput = {
 };
 
 export function ArtPricingPage() {
-  const [formState, setFormState] = useState<ArtPricingInput>(() => {
-    const saved = readStoredState();
-
-    if (!saved) {
-      return defaultArtPricingInput;
-    }
-
-    try {
-      return { ...defaultArtPricingInput, ...JSON.parse(saved) } as ArtPricingInput;
-    } catch {
-      return defaultArtPricingInput;
-    }
-  });
+  const [formState, setFormState] = useSyncedLocalStorage<ArtPricingInput>(
+    STORAGE_KEY,
+    defaultArtPricingInput,
+    (raw) => ({ ...defaultArtPricingInput, ...JSON.parse(raw) } as ArtPricingInput)
+  );
 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showReverse, setShowReverse] = useState(false);
   const [reverseInput, setReverseInput] = useState<ReverseInput>(defaultReverseInput);
-
-  useEffect(() => {
-    writeStoredState(formState);
-  }, [formState]);
 
   const hasValidInput = formState.time > 0 && formState.width > 0 && formState.height > 0;
   const result = hasValidInput ? calculatePrice(formState) : null;
@@ -407,42 +396,4 @@ raw price  = (${result.blendedCost} × ${formState.complexity}) + ${formState.ma
       </div>
     </section>
   );
-}
-
-function readStoredState() {
-  const storage = getStorage();
-
-  if (!storage) {
-    return null;
-  }
-
-  return storage.getItem(STORAGE_KEY);
-}
-
-function writeStoredState(formState: ArtPricingInput) {
-  const storage = getStorage();
-
-  if (!storage) {
-    return;
-  }
-
-  storage.setItem(STORAGE_KEY, JSON.stringify(formState));
-}
-
-function getStorage() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const storage = window.localStorage;
-
-  if (
-    !storage ||
-    typeof storage.getItem !== 'function' ||
-    typeof storage.setItem !== 'function'
-  ) {
-    return null;
-  }
-
-  return storage;
 }

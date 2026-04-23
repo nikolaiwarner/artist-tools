@@ -2,23 +2,53 @@ import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useS
 import { Camera, CameraOff, Download, ImagePlus, Layers3, Palette, Pause, Play, RefreshCcw } from 'lucide-react';
 
 import { AppMenuButton } from '../../components/AppMenuButton';
+import { useSyncedLocalStorage } from '../../sync/useSyncedLocalStorage';
 import { applyPosterStageToImageData, buildPosterStages, type PosterRenderMode, type PosterStage } from './posterize';
 
 type CameraStatus = 'camera-off' | 'camera-active' | 'image-mode' | 'camera-error';
 type CameraFacingMode = 'environment' | 'user';
+type PosterizeViewerSettings = {
+  cameraFacingMode: CameraFacingMode;
+  activeStageIndex: number;
+  renderMode: PosterRenderMode;
+};
 
 const DEFAULT_SOURCE_ASPECT_RATIO = '3 / 4';
+const STORAGE_KEY = 'artist-tools.posterize-viewer.settings';
+const DEFAULT_SETTINGS: PosterizeViewerSettings = {
+  cameraFacingMode: 'environment',
+  activeStageIndex: 0,
+  renderMode: 'grayscale',
+};
+
+function parseSettings(raw: string): PosterizeViewerSettings {
+  try {
+    const parsed = JSON.parse(raw) as Partial<PosterizeViewerSettings>;
+    return {
+      cameraFacingMode: parsed.cameraFacingMode === 'user' ? 'user' : 'environment',
+      activeStageIndex:
+        typeof parsed.activeStageIndex === 'number' && Number.isFinite(parsed.activeStageIndex)
+          ? Math.max(0, Math.floor(parsed.activeStageIndex))
+          : 0,
+      renderMode: parsed.renderMode === 'color' ? 'color' : 'grayscale',
+    };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
 
 export function PosterizeViewerPage() {
   const stages = useMemo(() => buildPosterStages(), []);
+  const [settings, setSettings] = useSyncedLocalStorage<PosterizeViewerSettings>(
+    STORAGE_KEY,
+    DEFAULT_SETTINGS,
+    parseSettings
+  );
   const [cameraStatus, setCameraStatus] = useState<CameraStatus>('camera-off');
-  const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>('environment');
   const [cameraPaused, setCameraPaused] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [sourceAspectRatio, setSourceAspectRatio] = useState(DEFAULT_SOURCE_ASPECT_RATIO);
-  const [activeStageIndex, setActiveStageIndex] = useState(0);
-  const [renderMode, setRenderMode] = useState<PosterRenderMode>('grayscale');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -27,7 +57,7 @@ export function PosterizeViewerPage() {
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  const activeStage = stages[activeStageIndex] ?? stages[0];
+  const activeStage = stages[settings.activeStageIndex] ?? stages[0];
 
   useEffect(() => {
     return () => {
@@ -47,7 +77,7 @@ export function PosterizeViewerPage() {
     }
 
     const drawFrame = () => {
-      renderFrameFromVideo(videoRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+      renderFrameFromVideo(videoRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
       animationFrameRef.current = window.requestAnimationFrame(drawFrame);
     };
 
@@ -57,20 +87,20 @@ export function PosterizeViewerPage() {
       cancelAnimationLoop(animationFrameRef.current);
       animationFrameRef.current = null;
     };
-  }, [cameraStatus, cameraPaused, activeStage, renderMode]);
+  }, [cameraStatus, cameraPaused, activeStage, settings.renderMode]);
 
   useEffect(() => {
     if (cameraStatus === 'camera-active' && cameraPaused) {
-      renderFrameFromVideo(videoRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+      renderFrameFromVideo(videoRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
       return;
     }
 
     if (cameraStatus === 'image-mode') {
-      renderFrameFromImage(imageRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+      renderFrameFromImage(imageRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
     }
-  }, [cameraStatus, cameraPaused, activeStage, renderMode]);
+  }, [cameraStatus, cameraPaused, activeStage, settings.renderMode]);
 
-  async function handleStartCamera(nextFacingMode = cameraFacingMode) {
+  async function handleStartCamera(nextFacingMode = settings.cameraFacingMode) {
     const mediaDevices = navigator.mediaDevices;
 
     if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
@@ -103,7 +133,7 @@ export function PosterizeViewerPage() {
         setImageUrl(null);
       }
 
-      setCameraFacingMode(nextFacingMode);
+      setSettings((current) => ({ ...current, cameraFacingMode: nextFacingMode }));
       setCameraPaused(false);
       setErrorMessage(null);
       setCameraStatus('camera-active');
@@ -153,7 +183,7 @@ export function PosterizeViewerPage() {
   function handleImageLoad(event: SyntheticEvent<HTMLImageElement>) {
     const image = event.currentTarget;
     setSourceAspectRatio(buildAspectRatioValue(image.naturalWidth, image.naturalHeight));
-    renderFrameFromImage(image, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+    renderFrameFromImage(image, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
   }
 
   function handleVideoMetadata(event: SyntheticEvent<HTMLVideoElement>) {
@@ -161,7 +191,7 @@ export function PosterizeViewerPage() {
     setSourceAspectRatio(buildAspectRatioValue(video.videoWidth, video.videoHeight));
     video.setAttribute('width', String(video.videoWidth));
     video.setAttribute('height', String(video.videoHeight));
-    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
   }
 
   async function handleCameraToggle() {
@@ -174,8 +204,8 @@ export function PosterizeViewerPage() {
   }
 
   async function handleSwitchCamera() {
-    const nextFacingMode = cameraFacingMode === 'environment' ? 'user' : 'environment';
-    setCameraFacingMode(nextFacingMode);
+    const nextFacingMode = settings.cameraFacingMode === 'environment' ? 'user' : 'environment';
+    setSettings((current) => ({ ...current, cameraFacingMode: nextFacingMode }));
 
     if (cameraStatus !== 'camera-active') {
       return;
@@ -200,17 +230,23 @@ export function PosterizeViewerPage() {
       return;
     }
 
-    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, renderMode);
+    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
     video.pause();
     setCameraPaused(true);
   }
 
   function handleStageToggle() {
-    setActiveStageIndex((current) => (current + 1) % stages.length);
+    setSettings((current) => ({
+      ...current,
+      activeStageIndex: (current.activeStageIndex + 1) % stages.length,
+    }));
   }
 
   function handleModeToggle() {
-    setRenderMode((current) => (current === 'grayscale' ? 'color' : 'grayscale'));
+    setSettings((current) => ({
+      ...current,
+      renderMode: current.renderMode === 'grayscale' ? 'color' : 'grayscale',
+    }));
   }
 
   function handleSaveCurrentImage() {
@@ -221,7 +257,7 @@ export function PosterizeViewerPage() {
 
     const link = document.createElement('a');
     link.href = stageCanvas.toDataURL('image/png');
-    link.download = `${activeStage.key}-${renderMode}.png`;
+    link.download = `${activeStage.key}-${settings.renderMode}.png`;
     link.click();
   }
 
@@ -260,7 +296,7 @@ export function PosterizeViewerPage() {
               type="button"
               className="icon-button"
               aria-label="Switch front or back camera"
-              title={`Switch to ${cameraFacingMode === 'environment' ? 'front' : 'back'} camera`}
+              title={`Switch to ${settings.cameraFacingMode === 'environment' ? 'front' : 'back'} camera`}
               onClick={() => {
                 void handleSwitchCamera();
               }}
@@ -294,9 +330,9 @@ export function PosterizeViewerPage() {
 
             <button
               type="button"
-              className={`icon-button${renderMode === 'color' ? ' icon-button-active' : ''}`}
+              className={`icon-button${settings.renderMode === 'color' ? ' icon-button-active' : ''}`}
               aria-label="Toggle grayscale or color"
-              aria-pressed={renderMode === 'color'}
+              aria-pressed={settings.renderMode === 'color'}
               title="Toggle grayscale or color"
               onClick={handleModeToggle}
             >

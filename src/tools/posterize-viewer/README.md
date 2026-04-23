@@ -39,6 +39,16 @@ Cycles through five posterization stages in order:
 - **Grayscale** — all posterization is applied to luminance only; output is gray pixels.
 - **Color** — posterization quantizes each RGB channel independently, preserving hue relationships at the selected number of levels. In the "Original" stage, the source image passes through without modification.
 
+## Synced state
+
+When `/sync` is connected, the tool stores and synchronizes shared study controls under `artist-tools.posterize-viewer.settings`:
+
+- Camera facing preference (`environment` / `user`)
+- Active value stage index
+- Render mode (`grayscale` / `color`)
+
+Camera stream lifecycle itself is still device-local (permission/session constrained), but control changes from one device propagate to other connected clients in realtime.
+
 ### Save / Export
 - Downloads the current stage canvas output as a PNG.
 - Works in all states: camera live, camera paused, or image mode.

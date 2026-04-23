@@ -35,8 +35,10 @@ import { CanvasStage } from './components/CanvasStage';
 import { ContextMenu } from './components/ContextMenu';
 import { LayerPanel } from './components/LayerPanel';
 import { TextEditor } from './components/TextEditor';
+import { SYNC_APPLIED_EVENT, type SyncAppliedDetail } from '../../sync/syncData';
 
 const DEFAULT_CANVAS_BACKGROUND_COLOR = '#1f1f1f';
+const PROJECTS_STORAGE_KEY = 'artist-tools.reference-board.projects';
 
 // ── History management ───────────────────────────────────────────────────────
 
@@ -602,30 +604,69 @@ export function ReferenceBoardCanvasPage() {
 
   const project = useMemo(() => (projectId ? getProject(projectId) : null), [projectId]);
 
+  const reloadProjectMeta = useCallback(() => {
+    if (!projectId) return;
+    const nextProject = getProject(projectId);
+    if (!nextProject) {
+      navigate('/tools/reference-board');
+      return;
+    }
+    setViewport(nextProject.viewport);
+    setCanvasBackgroundColor(nextProject.canvasBackgroundColor ?? DEFAULT_CANVAS_BACKGROUND_COLOR);
+  }, [navigate, projectId]);
+
+  const reloadCanvasData = useCallback(async () => {
+    if (!projectId) return;
+    const loadedLayers = await loadLayersForProject(projectId);
+    setLayers(loadedLayers);
+    const cache = new Map<string, string>();
+    await Promise.all(
+      loadedLayers
+        .filter((l): l is ImageLayer => l.type === 'image')
+        .map(async (l) => {
+          const dataUrl = await loadImage(l.imageId);
+          if (dataUrl) cache.set(l.imageId, dataUrl);
+        })
+    );
+    setImageCache(cache);
+    setLoading(false);
+  }, [projectId]);
+
   // Load layers + images on mount
   useEffect(() => {
     if (!projectId) return;
-    const proj = getProject(projectId);
-    if (proj) {
-      setViewport(proj.viewport);
-      setCanvasBackgroundColor(proj.canvasBackgroundColor ?? DEFAULT_CANVAS_BACKGROUND_COLOR);
-    }
+    reloadProjectMeta();
+    void reloadCanvasData();
+  }, [projectId, reloadCanvasData, reloadProjectMeta]);
 
-    void loadLayersForProject(projectId).then(async (loadedLayers) => {
-      setLayers(loadedLayers);
-      const cache = new Map<string, string>();
-      await Promise.all(
-        loadedLayers
-          .filter((l): l is ImageLayer => l.type === 'image')
-          .map(async (l) => {
-            const dataUrl = await loadImage(l.imageId);
-            if (dataUrl) cache.set(l.imageId, dataUrl);
-          })
-      );
-      setImageCache(cache);
-      setLoading(false);
-    });
-  }, [projectId]);
+  // React to remote sync apply events while this canvas is open.
+  useEffect(() => {
+    if (!projectId) return;
+
+    const onSyncApplied = (event: Event) => {
+      const detail = (event as CustomEvent<SyncAppliedDetail>).detail;
+      if (!detail) return;
+
+      if (detail.kind === 'ls' && detail.key === PROJECTS_STORAGE_KEY) {
+        reloadProjectMeta();
+        return;
+      }
+
+      if (detail.kind === 'db-image') {
+        void reloadCanvasData();
+        return;
+      }
+
+      if (detail.kind === 'db-layer') {
+        if (!detail.projectId || detail.projectId === projectId) {
+          void reloadCanvasData();
+        }
+      }
+    };
+
+    window.addEventListener(SYNC_APPLIED_EVENT, onSyncApplied);
+    return () => window.removeEventListener(SYNC_APPLIED_EVENT, onSyncApplied);
+  }, [projectId, reloadCanvasData, reloadProjectMeta]);
 
   function handleCanvasBackgroundColorChange(color: string) {
     setCanvasBackgroundColor(color);

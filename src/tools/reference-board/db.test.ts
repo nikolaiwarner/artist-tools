@@ -8,6 +8,8 @@ import {
   deleteLayer,
   deleteProjectData,
   estimateProjectStorageBytes,
+  exportAllDBData,
+  importAllDBData,
   resetDBForTesting,
 } from './db';
 import type { ImageLayer, TextLayer } from './types';
@@ -153,5 +155,40 @@ describe('estimateProjectStorageBytes', () => {
       enc.encode(dataUrl).length;
 
     expect(bytes).toBe(expected);
+  });
+});
+
+describe('export/import snapshot helpers', () => {
+  it('exports all images and layers in one payload', async () => {
+    const imageLayer = makeImageLayer({ id: 'img-layer', imageId: 'img-1' });
+    const textLayer = makeTextLayer({ id: 'txt-layer' });
+    await saveImage('img-1', 'data:image/png;base64,abc');
+    await saveLayer(imageLayer);
+    await saveLayer(textLayer);
+
+    const payload = await exportAllDBData();
+
+    expect(payload.images['img-1']).toBe('data:image/png;base64,abc');
+    expect(payload.layers).toHaveLength(2);
+    expect(payload.layers.find((layer) => layer.id === 'img-layer')).toEqual(imageLayer);
+    expect(payload.layers.find((layer) => layer.id === 'txt-layer')).toEqual(textLayer);
+  });
+
+  it('replaces existing DB content when importing', async () => {
+    await saveImage('old-img', 'data:old');
+    await saveLayer(makeImageLayer({ id: 'old-layer', imageId: 'old-img' }));
+
+    await importAllDBData({
+      images: { 'new-img': 'data:new' },
+      layers: [makeTextLayer({ id: 'new-layer', projectId: 'proj-2', text: 'Imported' })],
+    });
+
+    expect(await loadImage('old-img')).toBeUndefined();
+    expect(await loadImage('new-img')).toBe('data:new');
+
+    expect(await loadLayersForProject('proj-1')).toHaveLength(0);
+    const importedLayers = await loadLayersForProject('proj-2');
+    expect(importedLayers).toHaveLength(1);
+    expect(importedLayers[0].id).toBe('new-layer');
   });
 });

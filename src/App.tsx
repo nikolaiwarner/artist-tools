@@ -1,5 +1,5 @@
 import { NavLink, Route, Routes } from 'react-router-dom';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { HomePage } from './pages/HomePage';
 import { AppShellProvider } from './components/AppShellContext';
 import { ArtPricingPage } from './tools/art-pricing/ArtPricingPage';
@@ -7,9 +7,15 @@ import { ReferenceBoardCanvasPage } from './tools/reference-board/ReferenceBoard
 import { ReferenceBoardPage } from './tools/reference-board/ReferenceBoardPage';
 import { CanvasBuilderPage } from './tools/canvas-builder/CanvasBuilderPage';
 import { PosterizeViewerPage } from './tools/posterize-viewer/PosterizeViewerPage';
+import { SyncPage } from './sync/SyncPage';
+import { bootstrapSyncFromStorage } from './sync/syncRuntime';
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    bootstrapSyncFromStorage();
+  }, []);
 
   const open = () => setMenuOpen(true);
   const close = () => setMenuOpen(false);
@@ -36,6 +42,7 @@ export default function App() {
             <NavLink to="/tools/posterize-viewer" onClick={close}>Tonal Study</NavLink>
             <NavLink to="/tools/art-pricing" onClick={close}>Art Pricing</NavLink>
             <NavLink to="/tools/reference-board" onClick={close}>Reference Board</NavLink>
+            <NavLink to="/sync" onClick={close}>Sync</NavLink>
           </nav>
         </div>
 
@@ -47,6 +54,7 @@ export default function App() {
             <Route path="/tools/art-pricing" element={<ArtPricingPage />} />
             <Route path="/tools/reference-board" element={<ReferenceBoardPage />} />
             <Route path="/tools/reference-board/canvas/:projectId" element={<ReferenceBoardCanvasPage />} />
+            <Route path="/sync" element={<SyncPage />} />
           </Routes>
         </main>
       </div>

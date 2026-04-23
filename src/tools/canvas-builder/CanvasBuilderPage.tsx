@@ -1,29 +1,18 @@
-import { ChangeEvent, useEffect, useState } from 'react';
+import { ChangeEvent } from 'react';
 
 import { AppMenuButton } from '../../components/AppMenuButton';
+import { useSyncedLocalStorage } from '../../sync/useSyncedLocalStorage';
 import { buildCanvasPlan, defaultCanvasInput, type CanvasPlanInput } from './canvasBuilder';
 import { CanvasPreviewDiagram } from './CanvasPreviewDiagram';
 
 const STORAGE_KEY = 'artist-tools.canvas-builder';
 
 export function CanvasBuilderPage() {
-  const [formState, setFormState] = useState<CanvasPlanInput>(() => {
-    const saved = readStoredState();
-
-    if (!saved) {
-      return defaultCanvasInput;
-    }
-
-    try {
-      return { ...defaultCanvasInput, ...JSON.parse(saved) } as CanvasPlanInput;
-    } catch {
-      return defaultCanvasInput;
-    }
-  });
-
-  useEffect(() => {
-    writeStoredState(formState);
-  }, [formState]);
+  const [formState, setFormState] = useSyncedLocalStorage<CanvasPlanInput>(
+    STORAGE_KEY,
+    defaultCanvasInput,
+    (raw) => ({ ...defaultCanvasInput, ...JSON.parse(raw) } as CanvasPlanInput)
+  );
 
   const plan = buildCanvasPlan(formState);
 
@@ -130,38 +119,4 @@ export function CanvasBuilderPage() {
 
 function formatMeasure(value: number) {
   return Number.isInteger(value) ? `${value}` : `${value.toFixed(2).replace(/\.00$/, '')}`;
-}
-
-function readStoredState() {
-  const storage = getStorage();
-
-  if (!storage) {
-    return null;
-  }
-
-  return storage.getItem(STORAGE_KEY);
-}
-
-function writeStoredState(formState: CanvasPlanInput) {
-  const storage = getStorage();
-
-  if (!storage) {
-    return;
-  }
-
-  storage.setItem(STORAGE_KEY, JSON.stringify(formState));
-}
-
-function getStorage() {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const storage = window.localStorage;
-
-  if (!storage || typeof storage.getItem !== 'function' || typeof storage.setItem !== 'function') {
-    return null;
-  }
-
-  return storage;
 }

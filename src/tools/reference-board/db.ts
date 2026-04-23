@@ -20,6 +20,11 @@ interface ReferenceBoardDB {
 
 let _db: IDBPDatabase<ReferenceBoardDB> | null = null;
 
+function emitDBChange(): void {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return;
+  window.dispatchEvent(new CustomEvent('artist-tools:reference-board-db-change'));
+}
+
 async function getDB(): Promise<IDBPDatabase<ReferenceBoardDB>> {
   if (_db) return _db;
   _db = await openDB<ReferenceBoardDB>(DB_NAME, DB_VERSION, {
@@ -39,6 +44,7 @@ async function getDB(): Promise<IDBPDatabase<ReferenceBoardDB>> {
 export async function saveImage(imageId: string, dataUrl: string): Promise<void> {
   const db = await getDB();
   await db.put(IMAGES_STORE, dataUrl, imageId);
+  emitDBChange();
 }
 
 export async function loadImage(imageId: string): Promise<string | undefined> {
@@ -49,11 +55,13 @@ export async function loadImage(imageId: string): Promise<string | undefined> {
 export async function deleteImage(imageId: string): Promise<void> {
   const db = await getDB();
   await db.delete(IMAGES_STORE, imageId);
+  emitDBChange();
 }
 
 export async function saveLayer(layer: CanvasLayer): Promise<void> {
   const db = await getDB();
   await db.put(LAYERS_STORE, layer);
+  emitDBChange();
 }
 
 export async function loadLayersForProject(projectId: string): Promise<CanvasLayer[]> {
@@ -64,6 +72,7 @@ export async function loadLayersForProject(projectId: string): Promise<CanvasLay
 export async function deleteLayer(layerId: string): Promise<void> {
   const db = await getDB();
   await db.delete(LAYERS_STORE, layerId);
+  emitDBChange();
 }
 
 export async function deleteProjectData(projectId: string): Promise<void> {
@@ -77,6 +86,7 @@ export async function deleteProjectData(projectId: string): Promise<void> {
     }
   }
   await tx.done;
+  emitDBChange();
 }
 
 export async function estimateProjectStorageBytes(projectId: string): Promise<number> {
@@ -99,6 +109,35 @@ export async function estimateProjectStorageBytes(projectId: string): Promise<nu
   }
 
   return total;
+}
+
+export async function exportAllDBData(): Promise<{ images: Record<string, string>; layers: CanvasLayer[] }> {
+  const db = await getDB();
+  const [imageKeys, imageValues, layers] = await Promise.all([
+    db.getAllKeys(IMAGES_STORE),
+    db.getAll(IMAGES_STORE),
+    db.getAll(LAYERS_STORE),
+  ]);
+  const images: Record<string, string> = {};
+  imageKeys.forEach((key, i) => {
+    images[key as string] = imageValues[i];
+  });
+  return { images, layers };
+}
+
+export async function importAllDBData(data: { images: Record<string, string>; layers: CanvasLayer[] }): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction([IMAGES_STORE, LAYERS_STORE], 'readwrite');
+  tx.objectStore(IMAGES_STORE).clear();
+  tx.objectStore(LAYERS_STORE).clear();
+  for (const [key, value] of Object.entries(data.images)) {
+    tx.objectStore(IMAGES_STORE).put(value, key);
+  }
+  for (const layer of data.layers) {
+    tx.objectStore(LAYERS_STORE).put(layer);
+  }
+  await tx.done;
+  emitDBChange();
 }
 
 export function resetDBForTesting(): void {

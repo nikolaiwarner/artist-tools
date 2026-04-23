@@ -1,0 +1,17 @@
+{
+  "name": "artist-tools-sync-server",
+  "version": "1.0.0",
+  "description": "Simple sync server for Artist Tools",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "lib0": "^0.2.112",
+    "ws": "^8.18.0",
+    "y-protocols": "^1.0.6",
+    "yjs": "^13.6.30"
+  }
+}

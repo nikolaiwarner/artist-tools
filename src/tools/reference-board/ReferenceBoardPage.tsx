@@ -5,6 +5,7 @@ import { AppMenuButton } from '../../components/AppMenuButton';
 import { listProjects, createProject, updateProject, deleteProject } from './referenceBoard';
 import type { ProjectMeta } from './types';
 import { deleteProjectData, estimateProjectStorageBytes } from './db';
+import { SYNC_APPLIED_EVENT } from '../../sync/syncData';
 
 function estimateProjectMetaBytes(project: ProjectMeta): number {
   return new TextEncoder().encode(JSON.stringify(project)).length;
@@ -26,6 +27,14 @@ export function ReferenceBoardPage() {
 
   useEffect(() => {
     setProjects(listProjects());
+  }, []);
+
+  useEffect(() => {
+    function onSyncApplied() {
+      setProjects(listProjects());
+    }
+    window.addEventListener(SYNC_APPLIED_EVENT, onSyncApplied);
+    return () => window.removeEventListener(SYNC_APPLIED_EVENT, onSyncApplied);
   }, []);
 
   useEffect(() => {

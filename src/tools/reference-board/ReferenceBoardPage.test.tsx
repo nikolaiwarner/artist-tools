@@ -19,14 +19,20 @@ const makeStorage = () => {
   };
 };
 
-beforeEach(() => {
-  const storage = makeStorage();
+function stubWindow(storage: ReturnType<typeof makeStorage>, extra: Record<string, unknown> = {}) {
   vi.stubGlobal('window', {
     localStorage: storage,
     confirm: vi.fn().mockReturnValue(true),
     prompt: vi.fn().mockReturnValue('My Project'),
     crypto: { randomUUID: () => `test-${Math.random()}` },
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    ...extra,
   });
+}
+
+beforeEach(() => {
+  stubWindow(makeStorage());
 });
 
 function renderPage() {
@@ -74,12 +80,7 @@ describe('ReferenceBoardPage', () => {
       },
     ];
     storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
-    vi.stubGlobal('window', {
-      localStorage: storage,
-      confirm: vi.fn().mockReturnValue(true),
-      prompt: vi.fn().mockReturnValue('New'),
-      crypto: { randomUUID: () => `test-${Math.random()}` },
-    });
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
 
     renderPage();
     expect(screen.getByText('Seascape')).toBeInTheDocument();
@@ -97,12 +98,7 @@ describe('ReferenceBoardPage', () => {
       },
     ];
     storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
-    vi.stubGlobal('window', {
-      localStorage: storage,
-      confirm: vi.fn().mockReturnValue(true),
-      prompt: vi.fn().mockReturnValue('New'),
-      crypto: { randomUUID: () => `test-${Math.random()}` },
-    });
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
 
     renderPage();
     expect(screen.getByRole('button', { name: /rename flowers/i })).toBeInTheDocument();
@@ -122,12 +118,7 @@ describe('ReferenceBoardPage', () => {
       },
     ];
     storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
-    vi.stubGlobal('window', {
-      localStorage: storage,
-      confirm: vi.fn().mockReturnValue(true),
-      prompt: vi.fn().mockReturnValue('New'),
-      crypto: { randomUUID: () => `test-${Math.random()}` },
-    });
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
 
     renderPage();
 
@@ -149,12 +140,7 @@ describe('ReferenceBoardPage', () => {
       },
     ];
     storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
-    vi.stubGlobal('window', {
-      localStorage: storage,
-      confirm: vi.fn().mockReturnValue(true),
-      prompt: vi.fn().mockReturnValue('New'),
-      crypto: { randomUUID: () => `test-${Math.random()}` },
-    });
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
 
     renderPage();
 
@@ -181,12 +167,7 @@ describe('ReferenceBoardPage', () => {
       },
     ];
     storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
-    vi.stubGlobal('window', {
-      localStorage: storage,
-      confirm: vi.fn().mockReturnValue(true),
-      prompt: vi.fn().mockReturnValue('New'),
-      crypto: { randomUUID: () => `test-${Math.random()}` },
-    });
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
 
     renderPage();
 

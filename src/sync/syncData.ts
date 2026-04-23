@@ -1,0 +1,199 @@
+import { exportAllDBData, importAllDBData, saveImage, deleteImage, saveLayer, deleteLayer } from '../tools/reference-board/db';
+import type { CanvasLayer } from '../tools/reference-board/types';
+
+export interface SyncSnapshot {
+  version: 1;
+  timestamp: number;
+  localStorage: Record<string, string>;
+  indexedDB: {
+    images: Record<string, string>;
+    layers: CanvasLayer[];
+  };
+}
+
+const LOCAL_STORAGE_PREFIX = 'artist-tools.';
+// Exclude sync settings from the snapshot so they're device-local.
+// This intentionally covers both the current key and legacy variants like artist-tools.sync.settings.
+const EXCLUDED_PREFIXES = ['artist-tools.sync'];
+const DB_CHANGE_EVENT = 'artist-tools:reference-board-db-change';
+export const SYNC_APPLIED_EVENT = 'artist-tools:sync-applied';
+
+export type SyncAppliedDetail =
+  | { kind: 'ls'; key: string }
+  | { kind: 'db-image'; id: string }
+  | { kind: 'db-layer'; id: string; projectId?: string };
+
+const subscribers = new Set<() => void>();
+let unpatchLocalStorage: (() => void) | null = null;
+let eventListenersAttached = false;
+
+function notifySubscribers(): void {
+  subscribers.forEach((fn) => fn());
+}
+
+function isExcludedKey(key: string): boolean {
+  return EXCLUDED_PREFIXES.some((prefix) => key === prefix || key.startsWith(`${prefix}.`));
+}
+
+function attachEventListeners(): void {
+  if (typeof window === 'undefined' || eventListenersAttached) return;
+  const onChange = () => notifySubscribers();
+  window.addEventListener(DB_CHANGE_EVENT, onChange);
+  window.addEventListener('storage', onChange);
+  eventListenersAttached = true;
+}
+
+function patchLocalStorageMethods(): void {
+  if (typeof Storage === 'undefined' || unpatchLocalStorage) return;
+
+  const proto = Storage.prototype;
+  const originalSetItem = proto.setItem;
+  const originalRemoveItem = proto.removeItem;
+  const originalClear = proto.clear;
+
+  proto.setItem = function patchedSetItem(this: Storage, key: string, value: string): void {
+    originalSetItem.call(this, key, value);
+    notifySubscribers();
+  };
+
+  proto.removeItem = function patchedRemoveItem(this: Storage, key: string): void {
+    originalRemoveItem.call(this, key);
+    notifySubscribers();
+  };
+
+  proto.clear = function patchedClear(this: Storage): void {
+    originalClear.call(this);
+    notifySubscribers();
+  };
+
+  unpatchLocalStorage = () => {
+    proto.setItem = originalSetItem;
+    proto.removeItem = originalRemoveItem;
+    proto.clear = originalClear;
+    unpatchLocalStorage = null;
+  };
+}
+
+export function subscribeToLocalDataChanges(onChange: () => void): () => void {
+  subscribers.add(onChange);
+  patchLocalStorageMethods();
+  attachEventListeners();
+
+  return () => {
+    subscribers.delete(onChange);
+  };
+}
+
+export async function collectSnapshot(): Promise<SyncSnapshot> {
+  // Collect all artist-tools.* localStorage entries
+  const localStorageData: Record<string, string> = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(LOCAL_STORAGE_PREFIX) && !isExcludedKey(key)) {
+      localStorageData[key] = localStorage.getItem(key) ?? '';
+    }
+  }
+
+  // Collect all IndexedDB data from the reference board
+  const indexedDB = await exportAllDBData();
+
+  return {
+    version: 1,
+    timestamp: Date.now(),
+    localStorage: localStorageData,
+    indexedDB,
+  };
+}
+
+export async function restoreSnapshot(snapshot: SyncSnapshot): Promise<void> {
+  // Restore localStorage entries
+  for (const [key, value] of Object.entries(snapshot.localStorage)) {
+    if (key.startsWith(LOCAL_STORAGE_PREFIX) && !isExcludedKey(key)) {
+      localStorage.setItem(key, value);
+    }
+  }
+
+  // Restore IndexedDB
+  await importAllDBData(snapshot.indexedDB);
+}
+
+// ── Granular entry API ────────────────────────────────────────────────────────
+// Each piece of local data is represented as a flat Yjs map entry with a
+// prefixed string key, allowing the Yjs CRDT to merge changes independently.
+
+export const GRANULAR_LS_PREFIX = 'ls:';
+export const GRANULAR_IMAGE_PREFIX = 'db:image:';
+export const GRANULAR_LAYER_PREFIX = 'db:layer:';
+
+/** Collect all syncable local data as a flat yjsKey → value map. */
+export async function collectAllEntries(): Promise<Map<string, string>> {
+  const entries = new Map<string, string>();
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(LOCAL_STORAGE_PREFIX) && !isExcludedKey(key)) {
+      entries.set(`${GRANULAR_LS_PREFIX}${key}`, localStorage.getItem(key) ?? '');
+    }
+  }
+
+  const { images, layers } = await exportAllDBData();
+  for (const [id, dataUrl] of Object.entries(images)) {
+    entries.set(`${GRANULAR_IMAGE_PREFIX}${id}`, dataUrl);
+  }
+  for (const layer of layers) {
+    entries.set(`${GRANULAR_LAYER_PREFIX}${layer.id}`, JSON.stringify(layer));
+  }
+
+  return entries;
+}
+
+/**
+ * Apply a single granular entry received from Yjs to local state.
+ * Pass null as value to delete the entry.
+ */
+export async function applyEntry(yjsKey: string, value: string | null): Promise<void> {
+  if (yjsKey.startsWith(GRANULAR_LS_PREFIX)) {
+    const lsKey = yjsKey.slice(GRANULAR_LS_PREFIX.length);
+    if (!lsKey.startsWith(LOCAL_STORAGE_PREFIX) || isExcludedKey(lsKey)) return;
+    if (value === null) {
+      localStorage.removeItem(lsKey);
+    } else {
+      localStorage.setItem(lsKey, value);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
+        detail: { kind: 'ls', key: lsKey },
+      }));
+    }
+  } else if (yjsKey.startsWith(GRANULAR_IMAGE_PREFIX)) {
+    const imageId = yjsKey.slice(GRANULAR_IMAGE_PREFIX.length);
+    if (value === null) {
+      await deleteImage(imageId);
+    } else {
+      await saveImage(imageId, value);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
+        detail: { kind: 'db-image', id: imageId },
+      }));
+    }
+  } else if (yjsKey.startsWith(GRANULAR_LAYER_PREFIX)) {
+    const layerId = yjsKey.slice(GRANULAR_LAYER_PREFIX.length);
+    if (value === null) {
+      await deleteLayer(layerId);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
+          detail: { kind: 'db-layer', id: layerId },
+        }));
+      }
+    } else {
+      const layer = JSON.parse(value) as CanvasLayer;
+      await saveLayer(layer);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
+          detail: { kind: 'db-layer', id: layerId, projectId: layer.projectId },
+        }));
+      }
+    }
+  }
+}

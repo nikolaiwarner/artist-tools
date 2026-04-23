@@ -18,7 +18,9 @@
     "react-dom": "^19.2.0",
     "react-konva": "^19.2.3",
     "react-router-dom": "^7.9.4",
-    "use-image": "^1.1.4"
+    "use-image": "^1.1.4",
+    "y-websocket": "^3.0.0",
+    "yjs": "^13.6.30"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

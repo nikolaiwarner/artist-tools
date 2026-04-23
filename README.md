@@ -2,7 +2,7 @@
 
 Artist Tools is a browser-based React app for small studio utilities. It has no backend, stores tool state locally in the browser when useful, and is structured so each tool can live on its own route behind a shared app shell.
 
-The project ships with Canvas Builder, Camera Tonal Study, Art Pricing Calculator, and Reference Board (an infinite-canvas reference image board), and is set up for deployment to GitHub Pages.
+The project ships with Canvas Builder, Camera Tonal Study, Art Pricing Calculator, Reference Board (an infinite-canvas reference image board), and Sync (a client for a minimal self-hosted sync server), and is set up for deployment to GitHub Pages.
 
 ## Stack
 
@@ -53,10 +53,12 @@ If the repository name changes, update the production base path in `vite.config.
 - `src/components/AppShellContext.tsx` exposes shared app-shell controls such as opening and closing the tool drawer
 - `src/components/AppMenuButton.tsx` provides the reusable menu trigger used on top-level pages
 - `src/pages/HomePage.tsx` contains the landing page and tool index
+- `src/sync/` contains the Yjs realtime sync page, app-level runtime bootstrap, and local data replication helpers
 - `src/tools/canvas-builder/` contains the first tool UI, calculator logic, diagram component, and tests
 - `src/tools/posterize-viewer/` contains camera/image tonal study rendering logic, UI, and tests
 - `src/tools/art-pricing/` contains price calculation and reverse-calculation logic, UI, and tests
 - `src/tools/reference-board/` contains the Reference Board infinite canvas tool (types, project logic, IndexedDB layer, canvas components, tests)
+- `sync-server/` contains a standalone Node.js sync server that stores Yjs room state per sync key
 - `src/styles.css` contains a compact, barebones visual system tuned to maximize tool workspace
 
 ## Tools
@@ -109,6 +111,27 @@ Key features:
 - Text layers with font, size, bold/italic, color, and alignment controls
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
 - Images stored in IndexedDB; project metadata stored in localStorage
+
+### Sync
+
+Sync provides automatic cross-device realtime synchronization via a self-hosted Yjs WebSocket server.
+
+Key behaviors:
+- User enters a server URL and sync key in the Sync page
+- User must click Save and connect to persist/apply those settings
+- Sync starts automatically after saved settings include both values and keeps running app-wide (not only while viewing `/sync`)
+- Changes propagate live to other connected clients with the same key
+- Open tool pages rehydrate in place when remote sync entries are applied (no manual refresh required)
+- Posterize Viewer syncs the shared study controls (`renderMode`, active stage, camera facing preference)
+- Initial connect is remote-first: if remote state exists, it is applied to the client
+- Sync settings remain local to each device; any localStorage key under `artist-tools.sync*` is excluded from synced content
+- Remote restore is non-destructive for unrelated localStorage keys (missing keys are not auto-deleted)
+
+Server quick start:
+1. Change directory to `sync-server/`.
+2. Run `npm install`.
+3. Run `npm start` (defaults to port `3579`).
+4. Enter the server URL and a shared key in each client device.
 
 ## UI Direction
 

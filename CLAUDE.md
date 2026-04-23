@@ -18,6 +18,7 @@
 - The shared shell uses an on-demand side drawer for navigation instead of a persistent header.
 - Top-level pages place the menu trigger on the left side of the hero area; sub-tool work surfaces should omit it unless navigation is essential in-context.
 - Test environment is jsdom + `fake-indexeddb/auto` (loaded in `src/test/setup.ts`) to support IndexedDB tests.
+- Optional self-hosted sync is supported via a standalone `sync-server/` Node.js app and a client page at `/sync`.
 
 ## Current App Structure
 
@@ -26,6 +27,14 @@
 - `src/components/AppShellContext.tsx`: shared app-shell state and actions for the navigation drawer
 - `src/components/AppMenuButton.tsx`: reusable menu trigger for top-level page heroes
 - `src/pages/HomePage.tsx`: landing page and tool directory
+- `src/sync/syncTypes.ts`: sync payload and settings TypeScript types
+- `src/sync/syncData.ts`: granular entry collection/apply logic for localStorage + IndexedDB; also exports legacy `collectSnapshot`/`restoreSnapshot` for testing
+- `src/sync/yjsAutoSync.ts`: Yjs-based automatic realtime sync loop (WebSocket + merge + restore)
+- `src/sync/syncRuntime.ts`: app-scoped singleton runtime that boots/maintains sync from saved settings across all routes
+- `src/sync/useSyncedLocalStorage.ts`: localStorage-backed React hook that rehydrates state when remote sync applies changes
+- `src/sync/SyncPage.tsx`: sync settings and connection status UI
+- `src/sync/SyncPage.test.tsx`: sync settings confirmation behavior tests
+- `src/sync/*.test.ts`: sync granular entry and legacy snapshot behavior tests
 - `src/tools/canvas-builder/README.md`: **canonical feature spec** for Canvas Builder
 - `src/tools/canvas-builder/canvasBuilder.ts`: core Canvas Builder calculation logic
 - `src/tools/canvas-builder/CanvasBuilderPage.tsx`: Canvas Builder interface
@@ -51,6 +60,8 @@
 - `src/tools/reference-board/components/TextEditor.tsx`: HTML textarea overlay for text layer editing
 - `src/tools/reference-board/*.test.ts*`: reference board logic and page behavior tests
 - `src/styles.css`: global styling and responsive layout
+- `sync-server/server.js`: minimal Express + Yjs websocket sync server (`WS /yjs-ws/:key`, `GET /health`)
+- `sync-server/README.md`: sync server run instructions and security notes
 
 ## Development Workflow
 
@@ -78,3 +89,15 @@ Each tool has a `README.md` in its directory that is the **canonical spec** for 
 - Camera Tonal Study: `src/tools/posterize-viewer/README.md`
 - Art Pricing Calculator: `src/tools/art-pricing/README.md`
 - Reference Board: `src/tools/reference-board/README.md`
+
+## Sync Strategy
+
+- Sync is Yjs-only and automatic once server URL + sync key are configured.
+- The sync runtime is app-scoped (bootstrapped by `App.tsx`) so sync stays active while using any tool page, not just `/sync`.
+- Realtime transport is WebSocket at `/yjs-ws/:key`.
+- **Granular sync model**: each piece of data is a separate Yjs map entry with a prefixed key (`ls:`, `db:image:`, `db:layer:`), so changes to different tools/entities never overwrite each other.
+- Synced data includes all `artist-tools.*` localStorage keys except sync config keys under the `artist-tools.sync*` prefix, plus all Reference Board IndexedDB image/layer records.
+- Server data model is one Yjs room per sync key (`artist-tools-sync-v2` map); many users are supported by using different keys.
+- Initial connect is remote-first: existing room state is applied per-entry before pushing local-only entries to Yjs.
+- Applying remote entries never deletes unrelated local data — each key is updated independently.
+- Open tool pages rehydrate in place from `artist-tools:sync-applied` events, including Reference Board canvas/project views and shared Posterize Viewer controls.
