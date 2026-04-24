@@ -52,14 +52,37 @@ If the repository name changes, update the production base path in `vite.config.
 - `src/App.tsx` contains the shared app shell and route definitions
 - `src/components/AppShellContext.tsx` exposes shared app-shell controls such as opening and closing the tool drawer
 - `src/components/AppMenuButton.tsx` provides the reusable menu trigger used on top-level pages
+- `src/components/SendToReferenceBoardDialog.tsx` provides a reusable project-select/create dialog used by tools that send images into Reference Board
 - `src/pages/HomePage.tsx` contains the landing page and tool index
 - `src/sync/` contains the Yjs realtime sync page, app-level runtime bootstrap, and local data replication helpers
 - `src/tools/canvas-builder/` contains the first tool UI, calculator logic, diagram component, and tests
 - `src/tools/posterize-viewer/` contains camera/image tonal study rendering logic, UI, and tests
 - `src/tools/art-pricing/` contains price calculation and reverse-calculation logic, UI, and tests
-- `src/tools/reference-board/` contains the Reference Board infinite canvas tool (types, project logic, IndexedDB layer, canvas components, tests)
+- `src/tools/reference-board/` contains the Reference Board infinite canvas tool (types, project logic, IndexedDB layer, send-integration helpers, canvas components, tests)
 - `sync-server/` contains a standalone Node.js sync server that stores Yjs room state per sync key
 - `src/styles.css` contains a compact, barebones visual system tuned to maximize tool workspace
+
+## Reusable Feature Architecture
+
+When features need to be shared across multiple tools, this codebase follows a three-layer pattern:
+
+1. **Pure Functions** (no React)
+   - Framework-agnostic business logic in `src/tools/[feature]/[feature].ts`
+   - Example: `resolveReferenceBoardDestination()`, `appendCanvasImageToProject()`
+   - Fully testable and reusable anywhere
+
+2. **State Management Hook**
+   - Custom React hook in `src/hooks/use[Feature].ts`
+   - Encapsulates all state and handlers with clean TypeScript interfaces
+   - Example: `useSendToReferenceBoardDialog()` bundles dialog state, project selection, and send workflow
+   - Any page/tool can import and use it: `const { state, handlers } = useFeature()`
+
+3. **Stateless UI Component**
+   - Presentational React component in `src/components/[Feature].tsx`
+   - Accepts state props and callback handlers only
+   - Example: `SendToReferenceBoardDialog` is used by Posterize Viewer without any reimplementation
+
+**Real Example**: The send-to-reference-board feature demonstrates this pattern. Posterize Viewer sends study frames to Reference Board projects using a reusable hook and component. Future tools like Canvas Builder or Art Pricing can use the same workflow by importing `useSendToReferenceBoardDialog` and `SendToReferenceBoardDialog`.
 
 ## Tools
 
@@ -89,6 +112,7 @@ Current output includes:
 - camera controls for start/stop, front/back switching, and pausing on the current frame while still allowing stage/color adjustments
 - image upload support for still references
 - save button for exporting the current filtered output as an image
+- send-to-reference-board action that saves the current study frame into a selected Reference Board project as a new image layer
 - mobile-friendly preview sizing that preserves the live camera aspect ratio without stretching
 
 ### Art Pricing Calculator

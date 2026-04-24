@@ -455,13 +455,36 @@ p {
   border: 0;
 }
 
-.poster-status,
 .poster-error {
   margin-bottom: 8px;
   font-size: 0.84rem;
 }
 
 .poster-error {
+  color: #7a1b1b;
+}
+
+.poster-toast-stack {
+  min-height: 0;
+}
+
+.poster-toast {
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 0.84rem;
+}
+
+.poster-toast-success {
+  border-color: #b7d8cc;
+  background: #eef8f3;
+  color: #0f4e3a;
+}
+
+.poster-toast-error {
+  border-color: #e3b7b7;
+  background: #fcf0f0;
   color: #7a1b1b;
 }
 
@@ -536,6 +559,134 @@ p {
 
 .poster-results-panel {
   align-content: stretch;
+}
+
+/* ── Send to Reference Board dialog ──────────────────────────── */
+
+.poster-send-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 50;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.poster-send-dialog {
+  background: #fafaf8;
+  border: 1px solid var(--stroke);
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+  padding: 18px 16px 20px;
+  width: 100%;
+  max-width: 100%;
+}
+
+.poster-send-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+
+.poster-send-project-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.poster-send-project-btn {
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  border: 1px solid var(--stroke);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  font-size: 0.88rem;
+  cursor: pointer;
+}
+
+.poster-send-project-btn[aria-pressed='true'] {
+  background: var(--accent);
+  border-color: var(--accent-deep);
+  color: #f2fbf8;
+}
+
+.poster-send-label {
+  display: block;
+  font-size: 0.74rem;
+  font-family: 'IBM Plex Mono', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  margin-bottom: 5px;
+}
+
+.poster-send-new-project {
+  margin-bottom: 14px;
+}
+
+.poster-send-new-project-row {
+  display: flex;
+  gap: 6px;
+}
+
+.poster-send-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--stroke);
+  border-radius: 4px;
+  background: #fff;
+  font-size: 0.88rem;
+  font-family: inherit;
+}
+
+.poster-send-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.poster-send-cancel-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--stroke);
+  border-radius: 4px;
+  background: var(--surface-strong);
+  font-size: 0.88rem;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.poster-send-confirm-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--accent-deep);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #f2fbf8;
+  font-size: 0.88rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-family: inherit;
+}
+
+.poster-send-confirm-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@media (min-width: 781px) {
+  .poster-send-backdrop {
+    align-items: center;
+  }
+
+  .poster-send-dialog {
+    border-radius: 8px;
+    max-width: 340px;
+  }
 }
 
 .canvas-preview {
@@ -673,24 +824,24 @@ p {
     height: 48px;
   }
 
-  .poster-status,
+  .poster-toast-stack {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: 10px;
+    z-index: 10;
+  }
+
+  .poster-toast {
+    margin-bottom: 0;
+  }
+
   .poster-error {
     position: fixed;
     left: 16px;
     right: 16px;
+    top: 62px;
     z-index: 10;
-  }
-
-  .poster-status[role='status'] {
-    top: 10px;
-  }
-
-  .poster-status:not([role='status']) {
-    top: 32px;
-  }
-
-  .poster-error {
-    top: 54px;
   }
 
   .poster-results-panel {

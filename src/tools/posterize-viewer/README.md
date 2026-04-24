@@ -53,6 +53,13 @@ Camera stream lifecycle itself is still device-local (permission/session constra
 - Downloads the current stage canvas output as a PNG.
 - Works in all states: camera live, camera paused, or image mode.
 
+### Send to Reference Board
+- Sends the current stage canvas output directly into a Reference Board project as a new image layer.
+- Opens an inline dialog that lets the user select an existing project or type a new project name.
+- Typing a new project name clears existing project selection and creates that project on send.
+- New layers are added at the top of layer order (`zIndex + 1`) and retain the current stage resolution.
+- Shows transient toast success/error feedback after each send attempt.
+
 ## Rendering Pipeline
 
 Each frame (or on any state change):

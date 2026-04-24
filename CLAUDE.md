@@ -26,6 +26,7 @@
 - `src/App.tsx`: shared app shell and route table
 - `src/components/AppShellContext.tsx`: shared app-shell state and actions for the navigation drawer
 - `src/components/AppMenuButton.tsx`: reusable menu trigger for top-level page heroes
+- `src/components/SendToReferenceBoardDialog.tsx`: reusable project select/create dialog for sending generated images into Reference Board
 - `src/pages/HomePage.tsx`: landing page and tool directory
 - `src/sync/syncTypes.ts`: sync payload and settings TypeScript types
 - `src/sync/syncData.ts`: granular entry collection/apply logic for localStorage + IndexedDB; also exports legacy `collectSnapshot`/`restoreSnapshot` for testing
@@ -43,6 +44,7 @@
 - `src/tools/posterize-viewer/README.md`: **canonical feature spec** for Camera Tonal Study
 - `src/tools/posterize-viewer/posterize.ts`: grayscale and posterization transformation logic
 - `src/tools/posterize-viewer/PosterizeViewerPage.tsx`: camera/image tonal study interface
+- Camera Tonal Study can send the current study frame directly into a Reference Board project as a new image layer.
 - `src/tools/posterize-viewer/*.test.ts*`: posterization utility and page behavior tests
 - `src/tools/art-pricing/README.md`: **canonical feature spec** for Art Pricing Calculator
 - `src/tools/art-pricing/artPricing.ts`: price calculation and reverse-calculation logic
@@ -52,13 +54,14 @@
 - `src/tools/reference-board/types.ts`: shared TypeScript types (ProjectMeta, ImageLayer, TextLayer, CanvasLayer, Viewport)
 - `src/tools/reference-board/referenceBoard.ts`: pure project CRUD, project pin sorting, and layer ordering helpers (localStorage)
 - `src/tools/reference-board/db.ts`: IndexedDB wrapper using `idb` (images + layers stores)
+- `src/tools/reference-board/sendToReferenceBoard.ts`: reusable integration helpers to resolve/create destination projects and append canvas images as new image layers
 - `src/tools/reference-board/ReferenceBoardPage.tsx`: projects list interface
 - `src/tools/reference-board/ReferenceBoardCanvasPage.tsx`: canvas editor (react-konva stage, image/text layers, transforms)
 - `src/tools/reference-board/components/CanvasStage.tsx`: Konva Stage with pan/zoom + zoom controls
 - `src/tools/reference-board/components/ContextMenu.tsx`: right-click layer actions menu
 - `src/tools/reference-board/components/LayerPanel.tsx`: selected layer properties sidebar
 - `src/tools/reference-board/components/TextEditor.tsx`: HTML textarea overlay for text layer editing
-- `src/tools/reference-board/*.test.ts*`: reference board logic and page behavior tests
+- `src/tools/reference-board/*.test.ts*`: reference board logic, send-integration helpers, and page behavior tests
 - `src/styles.css`: global styling and responsive layout
 - `sync-server/server.js`: minimal Express + Yjs websocket sync server (`WS /yjs-ws/:key`, `GET /health`)
 - `sync-server/README.md`: sync server run instructions and security notes
@@ -89,6 +92,37 @@ Each tool has a `README.md` in its directory that is the **canonical spec** for 
 - Camera Tonal Study: `src/tools/posterize-viewer/README.md`
 - Art Pricing Calculator: `src/tools/art-pricing/README.md`
 - Reference Board: `src/tools/reference-board/README.md`
+
+## Reusable Feature Pattern
+
+When adding features that should be reusable across multiple tools, follow this three-layer architecture:
+
+### Layer 1: Pure Functions (Business Logic)
+- File: `src/tools/[feature]/[feature].ts`
+- Framework-agnostic functions with no React dependency
+- Example: `resolveReferenceBoardDestination()`, `appendCanvasImageToProject()` in `sendToReferenceBoard.ts`
+- Tests: Create comprehensive unit tests for these functions
+
+### Layer 2: State Management Hook
+- File: `src/hooks/use[Feature].ts`
+- Custom React hook encapsulating all state variables and handlers
+- Returns structured interface: `{ state: {...}, handlers: {...} }`
+- Example: `useSendToReferenceBoardDialog()` with 7 state variables and 5 handlers
+- Benefits: Reusable across any page/tool, clean state encapsulation, full TypeScript support
+
+### Layer 3: Stateless UI Component
+- File: `src/components/[Feature].tsx`
+- React component accepting state and callback props only
+- Example: `SendToReferenceBoardDialog` component
+- Benefits: Presentational only, no business logic, easy to style and test
+
+### Integration Pattern
+Pages using this feature simply:
+1. Import and call the custom hook: `const { state, handlers } = use[Feature]()`
+2. Pass state/handlers to the UI component
+3. No need to reimplement state management
+
+**Real Example**: Send to Reference Board feature is now reusable—any tool (Canvas Builder, Art Pricing, etc.) can import `useSendToReferenceBoardDialog` and `SendToReferenceBoardDialog` without duplicating code.
 
 ## Sync Strategy
 

@@ -5,6 +5,31 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppShellProvider } from '../../components/AppShellContext';
 import { PosterizeViewerPage } from './PosterizeViewerPage';
 
+const {
+  listProjectsMock,
+  createProjectMock,
+  loadLayersForProjectMock,
+  saveImageMock,
+  saveLayerMock,
+} = vi.hoisted(() => ({
+  listProjectsMock: vi.fn(),
+  createProjectMock: vi.fn(),
+  loadLayersForProjectMock: vi.fn(),
+  saveImageMock: vi.fn(),
+  saveLayerMock: vi.fn(),
+}));
+
+vi.mock('../reference-board/referenceBoard', () => ({
+  listProjects: listProjectsMock,
+  createProject: createProjectMock,
+}));
+
+vi.mock('../reference-board/db', () => ({
+  loadLayersForProject: loadLayersForProjectMock,
+  saveImage: saveImageMock,
+  saveLayer: saveLayerMock,
+}));
+
 function renderPage() {
   return render(
     <AppShellProvider value={{ menuOpen: false, openMenu: () => { }, closeMenu: () => { } }}>
@@ -21,6 +46,32 @@ describe('PosterizeViewerPage', () => {
   let toDataUrlSpy: { mockRestore: () => void };
 
   beforeEach(() => {
+    listProjectsMock.mockReset();
+    createProjectMock.mockReset();
+    loadLayersForProjectMock.mockReset();
+    saveImageMock.mockReset();
+    saveLayerMock.mockReset();
+
+    listProjectsMock.mockReturnValue([
+      {
+        id: 'project-1',
+        name: 'Daily Studies',
+        createdAt: 100,
+        updatedAt: 200,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+    ]);
+    createProjectMock.mockReturnValue({
+      id: 'project-created',
+      name: 'New Board',
+      createdAt: 100,
+      updatedAt: 200,
+      viewport: { x: 0, y: 0, scale: 1 },
+    });
+    loadLayersForProjectMock.mockResolvedValue([]);
+    saveImageMock.mockResolvedValue(undefined);
+    saveLayerMock.mockResolvedValue(undefined);
+
     stopTrack.mockReset();
     getUserMedia.mockReset();
     getUserMedia.mockResolvedValue({
@@ -53,6 +104,7 @@ describe('PosterizeViewerPage', () => {
     expect(screen.getByRole('button', { name: /next value stage/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /toggle grayscale or color/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /save current image/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /send to reference board/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/upload source image/i)).toBeInTheDocument();
 
     expect(screen.getByRole('heading', { name: /source/i })).toBeInTheDocument();
@@ -247,5 +299,73 @@ describe('PosterizeViewerPage', () => {
     expect(videoComputedStyle.objectFit).toBe('contain');
 
     getContextSpy.mockRestore();
+  });
+
+  it('sends the current study image to the selected reference board project', async () => {
+    const user = userEvent.setup();
+
+    const { container } = renderPage();
+
+    await user.click(screen.getByRole('button', { name: /send to reference board/i }));
+    await user.click(screen.getByRole('button', { name: /send image/i }));
+
+    expect(saveImageMock).toHaveBeenCalledTimes(1);
+    expect(loadLayersForProjectMock).toHaveBeenCalledWith('project-1');
+    expect(saveLayerMock).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-1',
+      type: 'image',
+      imageId: expect.any(String),
+    }));
+    expect(await screen.findByRole('status')).toHaveTextContent(/sent to daily studies/i);
+    expect(container.querySelector('.poster-status')).toBeNull();
+  });
+
+  it('creates a new reference board project from the send dialog and sends the image', async () => {
+    const user = userEvent.setup();
+    listProjectsMock.mockReturnValue([]);
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /send to reference board/i }));
+    await user.type(screen.getByLabelText(/new project name/i), 'Mood Board');
+    await user.click(screen.getByRole('button', { name: /send image/i }));
+
+    expect(createProjectMock).toHaveBeenCalledWith('Mood Board');
+    expect(loadLayersForProjectMock).toHaveBeenCalledWith('project-created');
+    expect(await screen.findByRole('status')).toHaveTextContent(/sent to new board/i);
+  });
+
+  it('unselects existing projects when typing a new project name', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /send to reference board/i }));
+
+    const existingProjectButton = screen.getByRole('button', { name: /daily studies/i });
+    expect(existingProjectButton).toHaveAttribute('aria-pressed', 'true');
+
+    await user.type(screen.getByLabelText(/new project name/i), 'Mood Board');
+
+    expect(existingProjectButton).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(screen.getByRole('button', { name: /send image/i }));
+
+    expect(createProjectMock).toHaveBeenCalledWith('Mood Board');
+    expect(loadLayersForProjectMock).toHaveBeenCalledWith('project-created');
+    expect(loadLayersForProjectMock).not.toHaveBeenCalledWith('project-1');
+    expect(await screen.findByRole('status')).toHaveTextContent(/sent to new board/i);
+  });
+
+  it('shows send failures as an alert toast', async () => {
+    const user = userEvent.setup();
+    saveImageMock.mockRejectedValueOnce(new Error('disk full'));
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /send to reference board/i }));
+    await user.click(screen.getByRole('button', { name: /send image/i }));
+
+    expect(screen.getByRole('alert')).toHaveTextContent(/unable to send image to reference board/i);
   });
 });

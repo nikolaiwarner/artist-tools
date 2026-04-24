@@ -1,8 +1,10 @@
 import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, CameraOff, Download, ImagePlus, Layers3, Palette, Pause, Play, RefreshCcw } from 'lucide-react';
+import { Camera, CameraOff, Download, ImagePlus, Layers3, Palette, Pause, Play, RefreshCcw, Send } from 'lucide-react';
 
 import { AppMenuButton } from '../../components/AppMenuButton';
+import { SendToReferenceBoardDialog } from '../../components/SendToReferenceBoardDialog';
 import { useSyncedLocalStorage } from '../../sync/useSyncedLocalStorage';
+import { useSendToReferenceBoardDialog } from '../../hooks/useSendToReferenceBoardDialog';
 import { applyPosterStageToImageData, buildPosterStages, type PosterRenderMode, type PosterStage } from './posterize';
 
 type CameraStatus = 'camera-off' | 'camera-active' | 'image-mode' | 'camera-error';
@@ -11,6 +13,11 @@ type PosterizeViewerSettings = {
   cameraFacingMode: CameraFacingMode;
   activeStageIndex: number;
   renderMode: PosterRenderMode;
+};
+
+type PosterToast = {
+  tone: 'success' | 'error';
+  message: string;
 };
 
 const DEFAULT_SOURCE_ASPECT_RATIO = '3 / 4';
@@ -49,6 +56,9 @@ export function PosterizeViewerPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [sourceAspectRatio, setSourceAspectRatio] = useState(DEFAULT_SOURCE_ASPECT_RATIO);
+  const [toast, setToast] = useState<PosterToast | null>(null);
+
+  const { state: sendState, handlers: sendHandlers } = useSendToReferenceBoardDialog();
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
@@ -88,6 +98,31 @@ export function PosterizeViewerPage() {
       animationFrameRef.current = null;
     };
   }, [cameraStatus, cameraPaused, activeStage, settings.renderMode]);
+
+  useEffect(() => {
+    if (sendState.sendError) {
+      setToast({ tone: 'error', message: sendState.sendError });
+      return;
+    }
+
+    if (sendState.sendStatus) {
+      setToast({ tone: 'success', message: sendState.sendStatus });
+    }
+  }, [sendState.sendError, sendState.sendStatus]);
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setToast(null);
+    }, 2800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [toast]);
 
   useEffect(() => {
     if (cameraStatus === 'camera-active' && cameraPaused) {
@@ -261,6 +296,10 @@ export function PosterizeViewerPage() {
     link.click();
   }
 
+  async function handleConfirmSend() {
+    await sendHandlers.performSend(stageCanvasRef.current!, buildId);
+  }
+
   return (
     <section className="tool-layout poster-tool-layout">
       <div className="tool-hero">
@@ -343,10 +382,45 @@ export function PosterizeViewerPage() {
               <Download size={18} strokeWidth={2} aria-hidden="true" />
             </button>
 
+            <button
+              type="button"
+              className="icon-button"
+              aria-label="Send to Reference Board"
+              title="Send to Reference Board"
+              disabled={sendState.sendingToBoard}
+              onClick={sendHandlers.openDialog}
+            >
+              <Send size={18} strokeWidth={2} aria-hidden="true" />
+            </button>
+          </div>
 
+          <div className="poster-toast-stack" aria-live="polite" aria-atomic="true">
+            {toast ? (
+              <p
+                className={`poster-toast ${toast.tone === 'error' ? 'poster-toast-error' : 'poster-toast-success'}`}
+                role={toast.tone === 'error' ? 'alert' : 'status'}
+              >
+                {toast.message}
+              </p>
+            ) : null}
           </div>
 
           {errorMessage ? <p className="poster-error">{errorMessage}</p> : null}
+
+          {sendState.showDialog && (
+            <SendToReferenceBoardDialog
+              projects={sendState.dialogProjects}
+              selectedProjectId={sendState.selectedProjectId}
+              newProjectName={sendState.newProjectName}
+              onSelectProject={sendHandlers.selectProject}
+              onNewProjectNameChange={sendHandlers.updateNewProjectName}
+              onCancel={sendHandlers.closeDialog}
+              onConfirm={() => {
+                void handleConfirmSend();
+              }}
+              canConfirm={Boolean(sendState.selectedProjectId || sendState.newProjectName.trim())}
+            />
+          )}
 
           <div className="poster-source-panel">
             <div className="poster-source-frame" style={{ aspectRatio: sourceAspectRatio }}>
@@ -390,6 +464,14 @@ export function PosterizeViewerPage() {
       </div>
     </section>
   );
+}
+
+function buildId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `poster-${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
 }
 
 function renderFrameFromVideo(
