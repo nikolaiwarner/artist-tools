@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, type ChangeEvent } from 'react';
 import { AppMenuButton } from '../components/AppMenuButton';
 import type { SyncSettings } from './syncTypes';
 import {
@@ -8,6 +8,12 @@ import {
   saveSyncSettingsToStorage,
   subscribeSyncRuntime,
 } from './syncRuntime';
+import {
+  buildBackupDocument,
+  collectSnapshot,
+  parseBackupDocument,
+  restoreSnapshot,
+} from './syncData';
 
 function loadSettings(): SyncSettings {
   return getSyncSettingsFromStorage();
@@ -21,6 +27,9 @@ export function SyncPage() {
   const [settings, setSettings] = useState<SyncSettings>(loadSettings);
   const [draftSettings, setDraftSettings] = useState<SyncSettings>(settings);
   const [runtimeState, setRuntimeState] = useState(getSyncRuntimeState());
+  const [backupStatus, setBackupStatus] = useState<string>('');
+  const [backupError, setBackupError] = useState<string>('');
+  const importFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     saveSettings(settings);
@@ -40,6 +49,51 @@ export function SyncPage() {
 
     setSettings(nextSettings);
     applySyncSettings(nextSettings);
+  }
+
+  async function exportBackup() {
+    try {
+      setBackupError('');
+
+      const snapshot = await collectSnapshot();
+      const backupDocument = buildBackupDocument(snapshot);
+      const blob = new Blob([JSON.stringify(backupDocument, null, 2)], {
+        type: 'application/json',
+      });
+
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `artist-tools-backup-${timestamp}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+
+      setBackupStatus('Backup exported. Keep this file in a safe place.');
+    } catch (error) {
+      setBackupError(error instanceof Error ? error.message : 'Backup export failed.');
+    }
+  }
+
+  async function importBackupFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setBackupError('');
+
+      const text = await file.text();
+      const snapshot = parseBackupDocument(text);
+      await restoreSnapshot(snapshot);
+
+      setBackupStatus('Backup imported. Tool data has been restored on this device.');
+    } catch (error) {
+      setBackupError(error instanceof Error ? error.message : 'Backup import failed.');
+    } finally {
+      event.target.value = '';
+    }
   }
 
   return (
@@ -111,6 +165,37 @@ export function SyncPage() {
           >
             {runtimeState.connectionStatus.toUpperCase()} - {runtimeState.statusMessage}
           </p>
+        </section>
+
+        <section className="tool-card sync-section">
+          <h2>Backup</h2>
+          <p className="sync-description">
+            Export all current tool data to a file and import it later to restore everything on another device.
+          </p>
+          <div className="sync-button-row">
+            <button type="button" onClick={exportBackup}>
+              Export backup
+            </button>
+            <button
+              type="button"
+              onClick={() => importFileRef.current?.click()}
+            >
+              Import backup
+            </button>
+          </div>
+          <label htmlFor="backup-file-input" className="field-label">
+            Import backup file
+          </label>
+          <input
+            ref={importFileRef}
+            id="backup-file-input"
+            type="file"
+            accept="application/json,.json"
+            className="text-input"
+            onChange={importBackupFile}
+          />
+          {backupStatus ? <p className="sync-status success">{backupStatus}</p> : null}
+          {backupError ? <p className="sync-status error">{backupError}</p> : null}
         </section>
 
         <section className="tool-card sync-section sync-notes">

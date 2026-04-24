@@ -29,7 +29,12 @@ vi.mock('react-konva', () => ({
     />
   ),
   Transformer: () => <div />,
-  Rect: () => <div />,
+  Rect: ({ onClick }: { onClick?: (e: { evt: { shiftKey: boolean } }) => void }) => (
+    <div
+      data-testid="konva-rect"
+      onClick={(e) => { e.stopPropagation(); onClick?.({ evt: { shiftKey: !!e.shiftKey } }); }}
+    />
+  ),
   Group: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Line: () => <div />,
 }));
@@ -121,9 +126,33 @@ describe('ReferenceBoardCanvasPage', () => {
     expect(await screen.findByTitle(/add text layer/i)).toBeInTheDocument();
   });
 
+  it('renders box button', async () => {
+    renderCanvas();
+    expect(await screen.findByTitle(/add box layer/i)).toBeInTheDocument();
+  });
+
   it('renders canvas stage', async () => {
     renderCanvas();
     expect(await screen.findByTestId('konva-stage')).toBeInTheDocument();
+  });
+
+  it('adds a box layer and persists it', async () => {
+    renderCanvas();
+
+    const addBoxButton = await screen.findByTitle(/add box layer/i);
+    fireEvent.click(addBoxButton);
+
+    expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'proj-1',
+      type: 'shape',
+      shape: 'rectangle',
+      width: 240,
+      height: 160,
+      stroke: '#4da3ff',
+      strokeWidth: 4,
+      fill: 'transparent',
+    }));
+    expect(await screen.findByTestId('konva-rect')).toBeInTheDocument();
   });
 
   it('renders canvas background color picker in toolbar', async () => {

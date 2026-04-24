@@ -1,5 +1,5 @@
 import { Copy, Trash2, FlipHorizontal2, FlipVertical2, Crop } from 'lucide-react';
-import type { CanvasLayer, ImageLayer, TextLayer } from '../types';
+import type { CanvasLayer, ImageLayer, ShapeLayer, TextLayer } from '../types';
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ export function LayerPanel({
 }: LayerPanelProps) {
   const imageLayer = layer.type === 'image' ? (layer as ImageLayer) : null;
   const textLayer = layer.type === 'text' ? (layer as TextLayer) : null;
+  const shapeLayer = layer.type === 'shape' ? (layer as ShapeLayer) : null;
 
   function numInput(
     label: string,
@@ -63,7 +64,7 @@ export function LayerPanel({
     <aside className="refboard-layer-panel">
       <div className="refboard-panel-section">
         <p className="refboard-panel-eyebrow">
-          {layer.type === 'image' ? 'Image Layer' : 'Text Layer'}
+          {layer.type === 'image' ? 'Image Layer' : layer.type === 'text' ? 'Text Layer' : 'Shape Layer'}
         </p>
         <div className="refboard-panel-row">
           <button onClick={onDuplicate} title="Duplicate layer" className="refboard-icon-btn">
@@ -196,6 +197,45 @@ export function LayerPanel({
                 ))}
               </div>
             </label>
+          </div>
+        </>
+      )}
+
+      {shapeLayer && (
+        <>
+          <div className="refboard-panel-section">
+            <p className="refboard-panel-eyebrow">Shape</p>
+            {numInput('Width', shapeLayer.width, (v) => onUpdate({ width: Math.max(1, v) } as Partial<ShapeLayer>), { min: 1, max: 4000 })}
+            {numInput('Height', shapeLayer.height, (v) => onUpdate({ height: Math.max(1, v) } as Partial<ShapeLayer>), { min: 1, max: 4000 })}
+            {numInput('Stroke Width', shapeLayer.strokeWidth, (v) => onUpdate({ strokeWidth: Math.max(0, v) } as Partial<ShapeLayer>), { min: 0, max: 100, step: 1 })}
+
+            <label className="refboard-panel-label">
+              <span>Stroke</span>
+              <input
+                type="color"
+                value={shapeLayer.stroke}
+                onChange={(e) => onUpdate({ stroke: e.target.value } as Partial<ShapeLayer>)}
+                className="refboard-panel-color"
+              />
+            </label>
+
+            <label className="refboard-panel-label">
+              <span>Fill</span>
+              <input
+                type="color"
+                value={shapeLayer.fill === 'transparent' ? '#ffffff' : shapeLayer.fill}
+                onChange={(e) => onUpdate({ fill: e.target.value } as Partial<ShapeLayer>)}
+                className="refboard-panel-color"
+              />
+            </label>
+
+            <button
+              aria-pressed={shapeLayer.fill === 'transparent'}
+              className={shapeLayer.fill === 'transparent' ? 'refboard-toggle-active' : ''}
+              onClick={() => onUpdate({ fill: shapeLayer.fill === 'transparent' ? '#ffffff' : 'transparent' } as Partial<ShapeLayer>)}
+            >
+              {shapeLayer.fill === 'transparent' ? 'Transparent Fill' : 'Use Transparent Fill'}
+            </button>
           </div>
         </>
       )}

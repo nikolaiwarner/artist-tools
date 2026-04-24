@@ -129,6 +129,7 @@ Pages using this feature simply:
 - Sync is Yjs-only and automatic once server URL + sync key are configured.
 - The sync runtime is app-scoped (bootstrapped by `App.tsx`) so sync stays active while using any tool page, not just `/sync`.
 - Realtime transport is WebSocket at `/yjs-ws/:key`.
+- Sync page includes manual full backup export/import as JSON for local migration and recovery.
 - **Granular sync model**: each piece of data is a separate Yjs map entry with a prefixed key (`ls:`, `db:image:`, `db:layer:`), so changes to different tools/entities never overwrite each other.
 - Synced data includes all `artist-tools.*` localStorage keys except sync config keys under the `artist-tools.sync*` prefix, plus all Reference Board IndexedDB image/layer records.
 - Server data model is one Yjs room per sync key (`artist-tools-sync-v2` map); many users are supported by using different keys.

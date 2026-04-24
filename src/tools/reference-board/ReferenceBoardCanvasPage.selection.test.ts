@@ -8,7 +8,7 @@ import {
   withTransformerNodesPreserved,
   type SelectionBox,
 } from './ReferenceBoardCanvasPage';
-import type { CanvasLayer, ImageLayer, TextLayer } from './types';
+import type { CanvasLayer, ImageLayer, ShapeLayer, TextLayer } from './types';
 
 function makeImageLayer(overrides: Partial<ImageLayer> = {}): ImageLayer {
   return {
@@ -55,6 +55,28 @@ function makeTextLayer(overrides: Partial<TextLayer> = {}): TextLayer {
   };
 }
 
+function makeShapeLayer(overrides: Partial<ShapeLayer> = {}): ShapeLayer {
+  return {
+    id: 'shape-1',
+    projectId: 'project-1',
+    type: 'shape',
+    shape: 'rectangle',
+    x: 120,
+    y: 140,
+    width: 160,
+    height: 100,
+    stroke: '#4da3ff',
+    strokeWidth: 4,
+    fill: 'transparent',
+    scaleX: 1,
+    scaleY: 1,
+    rotation: 0,
+    opacity: 1,
+    zIndex: 3,
+    ...overrides,
+  };
+}
+
 describe('selection helpers', () => {
   it('converts stage coordinates to world coordinates using viewport', () => {
     const world = stageToWorldPoint({ x: 300, y: 250 }, { x: 100, y: 50, scale: 2 });
@@ -95,7 +117,7 @@ describe('selection helpers', () => {
   });
 
   it('returns single-selected state when exactly one layer matches', () => {
-    const layer = makeImageLayer({ id: 'one' });
+    const layer = makeShapeLayer({ id: 'one' });
     const box: SelectionBox = {
       startX: 0,
       startY: 0,
@@ -106,6 +128,22 @@ describe('selection helpers', () => {
     const result = computeSelectionResult([layer], box);
     expect(result.multiSelectedIds).toEqual(new Set(['one']));
     expect(result.selectedId).toBe('one');
+  });
+
+  it('uses shape bounds during box selection', () => {
+    const shape = makeShapeLayer({ id: 'shape-box', x: 300, y: 220, width: 180, height: 120 });
+
+    const box: SelectionBox = {
+      startX: 350,
+      startY: 250,
+      endX: 430,
+      endY: 330,
+    };
+
+    const result = computeSelectionResult([shape], box);
+
+    expect(result.multiSelectedIds).toEqual(new Set(['shape-box']));
+    expect(result.selectedId).toBe('shape-box');
   });
 
   it('clears selection state when no layers match', () => {

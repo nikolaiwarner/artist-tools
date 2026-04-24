@@ -29,8 +29,8 @@ import {
   saveImage,
   saveLayer,
 } from './db';
-import { ArrowLeft, ImagePlus, Type, Download, Undo2, Redo2 } from 'lucide-react';
-import type { CanvasLayer, CropRect, ImageLayer, TextLayer, Viewport } from './types';
+import { ArrowLeft, ImagePlus, Type, Square, Download, Undo2, Redo2 } from 'lucide-react';
+import type { CanvasLayer, CropRect, ImageLayer, ShapeLayer, TextLayer, Viewport } from './types';
 import { CanvasStage } from './components/CanvasStage';
 import { ContextMenu } from './components/ContextMenu';
 import { LayerPanel } from './components/LayerPanel';
@@ -133,6 +133,17 @@ function getLayerBounds(layer: CanvasLayer): BoundsRect {
   if (layer.type === 'image') {
     const width = (layer.crop ? layer.crop.width * layer.width : layer.width) * Math.abs(layer.scaleX);
     const height = (layer.crop ? layer.crop.height * layer.height : layer.height) * Math.abs(layer.scaleY);
+    return {
+      minX: layer.x,
+      minY: layer.y,
+      maxX: layer.x + width,
+      maxY: layer.y + height,
+    };
+  }
+
+  if (layer.type === 'shape') {
+    const width = layer.width * Math.abs(layer.scaleX);
+    const height = layer.height * Math.abs(layer.scaleY);
     return {
       minX: layer.x,
       minY: layer.y,
@@ -391,6 +402,15 @@ function ImageNode({
     }
   };
 
+  const handleDragStart = () => {
+    // Cancel long-press timer when drag starts (prevents context menu from firing after drag)
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    onDragStart();
+  };
+
   const scaleX = layer.scaleX * (layer.flipX ? -1 : 1);
   const scaleY = layer.scaleY * (layer.flipY ? -1 : 1);
 
@@ -423,7 +443,7 @@ function ImageNode({
       onTap={onTap}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onDragStart={onDragStart}
+      onDragStart={handleDragStart}
       onDragMove={(e) => onDragMove(e.target.x(), e.target.y())}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
       shadowEnabled={isMultiSelected}
@@ -519,6 +539,15 @@ function TextNode({
     }
   };
 
+  const handleDragStart = () => {
+    // Cancel long-press timer when drag starts (prevents context menu from firing after drag)
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    onDragStart();
+  };
+
   const fontStyle = [layer.italic ? 'italic' : '', layer.bold ? 'bold' : '']
     .filter(Boolean)
     .join(' ') || 'normal';
@@ -547,7 +576,115 @@ function TextNode({
       onDblTap={onDblClick}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
-      onDragStart={onDragStart}
+      onDragStart={handleDragStart}
+      onDragMove={(e) => onDragMove(e.target.x(), e.target.y())}
+      onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
+      shadowEnabled={isMultiSelected}
+      shadowColor="#4da3ff"
+      shadowBlur={12}
+      shadowOpacity={0.9}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        onTransformEnd(node.scaleX(), node.scaleY(), node.rotation());
+        node.scaleX(1);
+        node.scaleY(1);
+      }}
+      onContextMenu={onContextMenu}
+    />
+  );
+}
+
+interface ShapeNodeProps {
+  layer: ShapeLayer;
+  isSelected: boolean;
+  isMultiSelected: boolean;
+  transformerRef: React.RefObject<Konva.Transformer | null>;
+  onClick: (e: Konva.KonvaEventObject<MouseEvent>) => void;
+  onTap: () => void;
+  onDragStart: () => void;
+  onDragMove: (x: number, y: number) => void;
+  onDragEnd: (x: number, y: number) => void;
+  onTransformEnd: (scaleX: number, scaleY: number, rotation: number) => void;
+  onContextMenu: (e: Konva.KonvaEventObject<MouseEvent>) => void;
+}
+
+function ShapeNode({
+  layer,
+  isSelected,
+  isMultiSelected,
+  transformerRef,
+  onClick,
+  onTap,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onTransformEnd,
+  onContextMenu,
+}: ShapeNodeProps) {
+  const nodeRef = useRef<Konva.Rect>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isSelected && transformerRef.current && nodeRef.current) {
+      transformerRef.current.nodes([nodeRef.current]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+  }, [isSelected, transformerRef]);
+
+  const handleTouchStart = () => {
+    longPressTimerRef.current = setTimeout(() => {
+      const node = nodeRef.current;
+      if (!node) return;
+      const stage = node.getStage();
+      const pointerPos = stage?.getPointerPosition();
+      if (!pointerPos) return;
+
+      const evt = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: pointerPos.x,
+        clientY: pointerPos.y,
+      });
+
+      onContextMenu({ evt } as Konva.KonvaEventObject<MouseEvent>);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleDragStart = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    onDragStart();
+  };
+
+  return (
+    <Rect
+      ref={nodeRef}
+      x={layer.x}
+      y={layer.y}
+      width={layer.width}
+      height={layer.height}
+      scaleX={layer.scaleX}
+      scaleY={layer.scaleY}
+      rotation={layer.rotation}
+      opacity={layer.opacity}
+      fill={layer.fill}
+      stroke={layer.stroke}
+      strokeWidth={layer.strokeWidth}
+      draggable
+      onClick={onClick}
+      onTap={onTap}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onDragStart={handleDragStart}
       onDragMove={(e) => onDragMove(e.target.x(), e.target.y())}
       onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
       shadowEnabled={isMultiSelected}
@@ -784,20 +921,11 @@ export function ReferenceBoardCanvasPage() {
       // Compute bounding box of all layers in world space
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const layer of allLayers) {
-        if (layer.type === 'image') {
-          const il = layer as ImageLayer;
-          const dispW = (il.crop ? il.crop.width * il.width : il.width) * Math.abs(il.scaleX);
-          const dispH = (il.crop ? il.crop.height * il.height : il.height) * Math.abs(il.scaleY);
-          minX = Math.min(minX, il.x);
-          minY = Math.min(minY, il.y);
-          maxX = Math.max(maxX, il.x + dispW);
-          maxY = Math.max(maxY, il.y + dispH);
-        } else {
-          minX = Math.min(minX, layer.x);
-          minY = Math.min(minY, layer.y);
-          maxX = Math.max(maxX, layer.x + 300);
-          maxY = Math.max(maxY, layer.y + 100);
-        }
+        const bounds = getLayerBounds(layer);
+        minX = Math.min(minX, bounds.minX);
+        minY = Math.min(minY, bounds.minY);
+        maxX = Math.max(maxX, bounds.maxX);
+        maxY = Math.max(maxY, bounds.maxY);
       }
 
       const pad = 20;
@@ -866,6 +994,9 @@ export function ReferenceBoardCanvasPage() {
             ...layer,
             crop: layer.crop ? { ...layer.crop } : undefined,
           } as ImageLayer;
+        }
+        if (layer.type === 'shape') {
+          return { ...layer } as ShapeLayer;
         }
         return { ...layer } as TextLayer;
       });
@@ -1261,6 +1392,38 @@ export function ReferenceBoardCanvasPage() {
     scheduleThumbnail();
   }
 
+  function handleAddShape() {
+    saveToHistory();
+    const stage = stageRef.current;
+    const centerX = stage ? (stage.width() / 2 - viewport.x) / viewport.scale : 300;
+    const centerY = stage ? (stage.height() / 2 - viewport.y) / viewport.scale : 200;
+
+    const layer: ShapeLayer = {
+      id: newId(),
+      projectId: projectId!,
+      type: 'shape',
+      shape: 'rectangle',
+      x: centerX - 120,
+      y: centerY - 80,
+      rotation: 0,
+      opacity: 1,
+      zIndex: nextZIndex(layers),
+      width: 240,
+      height: 160,
+      stroke: '#4da3ff',
+      strokeWidth: 4,
+      fill: 'transparent',
+      scaleX: 1,
+      scaleY: 1,
+    };
+
+    setLayers((prev) => [...prev, layer]);
+    void saveLayer(layer);
+    setSelectedId(layer.id);
+    setMultiSelectedIds(new Set([layer.id]));
+    scheduleThumbnail();
+  }
+
   // ── Context menu ──────────────────────────────────────────────────────────
 
   function handleContextMenu(e: Konva.KonvaEventObject<MouseEvent>, layerId: string) {
@@ -1339,20 +1502,11 @@ export function ReferenceBoardCanvasPage() {
     // Compute approximate bounding box of all layers in world space
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const layer of layers) {
-      if (layer.type === 'image') {
-        const il = layer as ImageLayer;
-        const w = il.width * Math.abs(il.scaleX);
-        const h = il.height * Math.abs(il.scaleY);
-        minX = Math.min(minX, il.x);
-        minY = Math.min(minY, il.y);
-        maxX = Math.max(maxX, il.x + w);
-        maxY = Math.max(maxY, il.y + h);
-      } else {
-        minX = Math.min(minX, layer.x);
-        minY = Math.min(minY, layer.y);
-        maxX = Math.max(maxX, layer.x + 300);
-        maxY = Math.max(maxY, layer.y + 100);
-      }
+      const bounds = getLayerBounds(layer);
+      minX = Math.min(minX, bounds.minX);
+      minY = Math.min(minY, bounds.minY);
+      maxX = Math.max(maxX, bounds.maxX);
+      maxY = Math.max(maxY, bounds.maxY);
     }
 
     const pad = 40;
@@ -1473,6 +1627,9 @@ export function ReferenceBoardCanvasPage() {
           <button className="refboard-toolbar-btn" onClick={handleAddText} title="Add text layer">
             <Type size={16} />
           </button>
+          <button className="refboard-toolbar-btn" onClick={handleAddShape} title="Add box layer">
+            <Square size={16} />
+          </button>
           <button className="refboard-toolbar-btn" onClick={handleDownload} title="Export canvas as PNG" disabled={layers.length === 0}>
             <Download size={16} />
           </button>
@@ -1524,6 +1681,23 @@ export function ReferenceBoardCanvasPage() {
                   onDragEnd={(x, y) => { if (!cropLayerId) handleLayerDragEnd(layer.id, x, y); }}
                   onTransformEnd={(scaleX, scaleY, rotation) =>
                     updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<ImageLayer>)
+                  }
+                  onContextMenu={(e) => handleContextMenu(e, layer.id)}
+                />
+              ) : layer.type === 'shape' ? (
+                <ShapeNode
+                  key={layer.id}
+                  layer={layer as ShapeLayer}
+                  isSelected={selectedId === layer.id && !cropLayerId}
+                  isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
+                  transformerRef={transformerRef}
+                  onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
+                  onTap={() => handleLayerClick(layer.id, false)}
+                  onDragStart={() => handleLayerDragStart(layer.id)}
+                  onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
+                  onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
+                  onTransformEnd={(scaleX, scaleY, rotation) =>
+                    updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<ShapeLayer>)
                   }
                   onContextMenu={(e) => handleContextMenu(e, layer.id)}
                 />

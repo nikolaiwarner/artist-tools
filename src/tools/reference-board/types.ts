@@ -18,7 +18,7 @@ export interface Viewport {
 interface BaseLayer {
   id: string;
   projectId: string;
-  type: 'image' | 'text';
+  type: 'image' | 'text' | 'shape';
   x: number;
   y: number;
   rotation: number;
@@ -59,4 +59,16 @@ export interface TextLayer extends BaseLayer {
   scaleY: number;
 }
 
-export type CanvasLayer = ImageLayer | TextLayer;
+export interface ShapeLayer extends BaseLayer {
+  type: 'shape';
+  shape: 'rectangle';
+  width: number;
+  height: number;
+  stroke: string;
+  strokeWidth: number;
+  fill: string;
+  scaleX: number;
+  scaleY: number;
+}
+
+export type CanvasLayer = ImageLayer | TextLayer | ShapeLayer;

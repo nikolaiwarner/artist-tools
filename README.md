@@ -121,7 +121,7 @@ Art Pricing Calculator helps artists estimate a selling price based on time, can
 
 ### Reference Board
 
-Reference Board is an infinite-canvas reference image board. Create projects, import images, arrange and transform them on a freely pannable/zoomable canvas, and annotate with text layers.
+Reference Board is an infinite-canvas reference image board. Create projects, import images, arrange and transform them on a freely pannable/zoomable canvas, annotate with text, and drop in composition boxes.
 
 Key features:
 - Multiple named projects, each with its own canvas
@@ -133,6 +133,7 @@ Key features:
 - Rotate/scale via canvas handles, plus flip H/V, opacity, non-destructive crop per image layer
 - Duplicating image layers reuses the same stored image data (no duplicate image blob writes)
 - Text layers with font, size, bold/italic, color, and alignment controls
+- Box layers for composition guides with resizable rectangle bounds plus stroke/fill controls
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
 - Images stored in IndexedDB; project metadata stored in localStorage
 
@@ -150,6 +151,7 @@ Key behaviors:
 - Initial connect is remote-first: if remote state exists, it is applied to the client
 - Sync settings remain local to each device; any localStorage key under `artist-tools.sync*` is excluded from synced content
 - Remote restore is non-destructive for unrelated localStorage keys (missing keys are not auto-deleted)
+- Backup export/import is available in the Sync page to save and restore all tool data as a JSON file (all `artist-tools.*` localStorage data except sync settings, plus Reference Board IndexedDB images/layers)
 
 Server quick start:
 1. Change directory to `sync-server/`.
@@ -179,4 +181,3 @@ This repo follows red/green TDD for new features and fixes:
 
 - add more artist-specific planning tools under `src/tools/`
 - share common form and result components as the tool set grows
-- add import/export helpers for saved local tool data if persistence needs expand

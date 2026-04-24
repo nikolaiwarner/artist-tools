@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { collectSnapshot, restoreSnapshot, collectAllEntries, applyEntry } from './syncData';
+import {
+  collectSnapshot,
+  restoreSnapshot,
+  collectAllEntries,
+  applyEntry,
+  buildBackupDocument,
+  parseBackupDocument,
+} from './syncData';
 
 const dbMocks = vi.hoisted(() => ({
   exportAllDBData: vi.fn(),
@@ -212,6 +219,63 @@ describe('syncData', () => {
 
     it('ignores unknown key prefixes', async () => {
       await expect(applyEntry('unknown:whatever', 'value')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('backup documents', () => {
+    it('buildBackupDocument wraps a snapshot with metadata', () => {
+      const snapshot = {
+        version: 1 as const,
+        timestamp: 1713980000000,
+        localStorage: {
+          'artist-tools.art-pricing': '{"x":1}',
+        },
+        indexedDB: {
+          images: { img1: 'data:image/png;base64,abc' },
+          layers: [],
+        },
+      };
+
+      const backup = buildBackupDocument(snapshot);
+
+      expect(backup.format).toBe('artist-tools-backup');
+      expect(backup.version).toBe(1);
+      expect(backup.snapshot).toEqual(snapshot);
+    });
+
+    it('parseBackupDocument returns snapshot from valid backup JSON', () => {
+      const backupJson = JSON.stringify({
+        format: 'artist-tools-backup',
+        version: 1,
+        exportedAt: 1713980001000,
+        snapshot: {
+          version: 1,
+          timestamp: 1713980000000,
+          localStorage: {
+            'artist-tools.canvas-builder': '{"width":20}',
+          },
+          indexedDB: {
+            images: {},
+            layers: [],
+          },
+        },
+      });
+
+      expect(parseBackupDocument(backupJson)).toEqual({
+        version: 1,
+        timestamp: 1713980000000,
+        localStorage: {
+          'artist-tools.canvas-builder': '{"width":20}',
+        },
+        indexedDB: {
+          images: {},
+          layers: [],
+        },
+      });
+    });
+
+    it('parseBackupDocument throws for invalid backup shape', () => {
+      expect(() => parseBackupDocument('{"version":1}')).toThrow(/invalid backup/i);
     });
   });
 });

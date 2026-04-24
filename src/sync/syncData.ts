@@ -11,12 +11,42 @@ export interface SyncSnapshot {
   };
 }
 
+export interface BackupDocument {
+  format: 'artist-tools-backup';
+  version: 1;
+  exportedAt: number;
+  snapshot: SyncSnapshot;
+}
+
 const LOCAL_STORAGE_PREFIX = 'artist-tools.';
 // Exclude sync settings from the snapshot so they're device-local.
 // This intentionally covers both the current key and legacy variants like artist-tools.sync.settings.
 const EXCLUDED_PREFIXES = ['artist-tools.sync'];
 const DB_CHANGE_EVENT = 'artist-tools:reference-board-db-change';
 export const SYNC_APPLIED_EVENT = 'artist-tools:sync-applied';
+const BACKUP_FORMAT = 'artist-tools-backup';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  if (!isRecord(value)) return false;
+  return Object.values(value).every((entry) => typeof entry === 'string');
+}
+
+function isValidSnapshot(value: unknown): value is SyncSnapshot {
+  if (!isRecord(value)) return false;
+  if (value.version !== 1 || typeof value.timestamp !== 'number') return false;
+
+  if (!isStringRecord(value.localStorage)) return false;
+
+  if (!isRecord(value.indexedDB)) return false;
+  if (!isStringRecord(value.indexedDB.images)) return false;
+  if (!Array.isArray(value.indexedDB.layers)) return false;
+
+  return true;
+}
 
 export type SyncAppliedDetail =
   | { kind: 'ls'; key: string }
@@ -115,6 +145,39 @@ export async function restoreSnapshot(snapshot: SyncSnapshot): Promise<void> {
 
   // Restore IndexedDB
   await importAllDBData(snapshot.indexedDB);
+}
+
+export function buildBackupDocument(snapshot: SyncSnapshot): BackupDocument {
+  return {
+    format: BACKUP_FORMAT,
+    version: 1,
+    exportedAt: Date.now(),
+    snapshot,
+  };
+}
+
+export function parseBackupDocument(jsonText: string): SyncSnapshot {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    throw new Error('Invalid backup file: could not parse JSON.');
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error('Invalid backup file format.');
+  }
+
+  if (parsed.format !== BACKUP_FORMAT || parsed.version !== 1 || typeof parsed.exportedAt !== 'number') {
+    throw new Error('Invalid backup file format.');
+  }
+
+  if (!isValidSnapshot(parsed.snapshot)) {
+    throw new Error('Invalid backup file format.');
+  }
+
+  return parsed.snapshot;
 }
 
 // ── Granular entry API ────────────────────────────────────────────────────────

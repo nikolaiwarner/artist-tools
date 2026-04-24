@@ -1,6 +1,6 @@
 # Reference Board
 
-Reference Board is an infinite-canvas reference image board for painters, illustrators, and artists. Organize reference images, add text annotations, and transform layers across multiple projects, all stored locally in your browser.
+Reference Board is an infinite-canvas reference image board for painters, illustrators, and artists. Organize reference images, add text annotations and composition boxes, and transform layers across multiple projects, all stored locally in your browser.
 
 ## How It Works
 
@@ -32,7 +32,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Undo/Redo**: toolbar buttons or Ctrl+Z / Ctrl+Shift+Z (Cmd+Z / Cmd+Shift+Z on Mac)
 - **Copy/Paste Layers**: Ctrl/Cmd+C copies the current selection; Ctrl/Cmd+V pastes the copied layers (or clipboard images if available)
 - **Box Select**: click and drag on empty canvas to draw a blue selection rectangle; layers fully inside the box are selected
-- Box select works for both image and text layers
+- Box select works for image, text, and box layers
 - Single match selects that layer (transformer handles shown); multiple matches enter multi-select state
 - Multi-selected layers are highlighted and can be dragged together while preserving their relative spacing
 - Multi-selection can be deleted with Delete/Backspace or the multi-select panel action
@@ -67,6 +67,13 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - Click/tap to select; double-click/double-tap to edit in-place (HTML textarea overlay)
 - **Layer panel** (opens as bottom drawer on mobile):
   - Font size, font family, bold/italic, text color, alignment, opacity slider
+
+### Box Layers
+- Add via **square icon** toolbar button
+- Default boxes are unfilled composition guides with a blue stroke
+- Click/tap to select; drag to reposition; use transformer handles to scale and rotate
+- **Layer panel** (opens as bottom drawer on mobile):
+  - Width, height, stroke width, stroke color, fill color, transparent-fill toggle, opacity slider
 
 ### Layer Ordering
 - **Desktop**: Right-click (or long press on touch) opens context menu: Bring to Front, Bring Forward, Send Backward, Send to Back
@@ -108,7 +115,7 @@ Reference Board is designed with first-class support for both desktop and mobile
 
 ```
 src/tools/reference-board/
-  types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, CanvasLayer, Viewport)
+  types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, ShapeLayer, CanvasLayer, Viewport)
   referenceBoard.ts                 — pure project CRUD + layer-ordering helpers (no I/O except localStorage)
   referenceBoard.test.ts
   db.ts                             — IndexedDB wrapper using idb (images + layers)
@@ -120,7 +127,7 @@ src/tools/reference-board/
   components/
     CanvasStage.tsx                 — Konva Stage + pan/zoom interactions
     ContextMenu.tsx                 — right-click layer actions
-    LayerPanel.tsx                  — sidebar: transform, scale, flip, crop, text formatting
+    LayerPanel.tsx                  — sidebar: transform, scale, flip, crop, text formatting, shape styling
     TextEditor.tsx                  — HTML textarea overlay positioned over selected text layer
 ```
 
