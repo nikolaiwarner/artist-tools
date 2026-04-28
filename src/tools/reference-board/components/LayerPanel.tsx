@@ -11,6 +11,10 @@ interface LayerPanelProps {
   onFlipH?: () => void;
   onFlipV?: () => void;
   onCropStart?: () => void;
+  onMaskDrawStart?: () => void;
+  onClearMask?: () => void;
+  onDetectMask?: () => void;
+  isDetectingMask?: boolean;
 }
 
 export function LayerPanel({
@@ -21,6 +25,10 @@ export function LayerPanel({
   onFlipH,
   onFlipV,
   onCropStart,
+  onMaskDrawStart,
+  onClearMask,
+  onDetectMask,
+  isDetectingMask = false,
 }: LayerPanelProps) {
   const imageLayer = layer.type === 'image' ? (layer as ImageLayer) : null;
   const textLayer = layer.type === 'text' ? (layer as TextLayer) : null;
@@ -127,6 +135,49 @@ export function LayerPanel({
                 >
                   Reset
                 </button>
+              )}
+            </div>
+          </div>
+
+          <div className="refboard-panel-section">
+            <p className="refboard-panel-eyebrow">Mask</p>
+            <div className="refboard-panel-row">
+              <button
+                type="button"
+                onClick={onDetectMask}
+                className="refboard-icon-btn"
+                title={isDetectingMask ? 'Detecting image mask' : 'Detect image mask'}
+                style={{ flex: 1, gap: 5 }}
+                disabled={isDetectingMask}
+              >
+                <span style={{ fontSize: '0.8rem' }}>{isDetectingMask ? 'Detecting…' : 'Detect Mask'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={onMaskDrawStart}
+                className="refboard-icon-btn"
+                title={imageLayer.maskImageId ? 'Edit image mask' : 'Draw image mask'}
+                style={{ flex: 1, gap: 5 }}
+                disabled={isDetectingMask}
+              >
+                <span style={{ fontSize: '0.8rem' }}>{imageLayer.maskImageId ? 'Edit Mask' : 'Draw Mask'}</span>
+              </button>
+              {imageLayer.maskImageId && (
+                <button
+                  type="button"
+                  title="Clear image mask"
+                  className="refboard-icon-btn"
+                  onClick={onClearMask}
+                  style={{ fontSize: '0.75rem' }}
+                  disabled={isDetectingMask}
+                >
+                  Clear
+                </button>
+              )}
+              {isDetectingMask && (
+                <p role="status" aria-live="polite" style={{ margin: 0, fontSize: '0.75rem', opacity: 0.8 }}>
+                  Detecting mask...
+                </p>
               )}
             </div>
           </div>

@@ -131,11 +131,12 @@ Key features:
 - Import images via toolbar button or drag-and-drop
 - Per-project canvas background color picker in the toolbar (persisted locally)
 - Rotate/scale via canvas handles, plus flip H/V, opacity, non-destructive crop per image layer
+- Optional non-destructive image masks per image layer, including automatic on-device segmentation detection (MODNet-first with fallback models) plus draw/edit/clear controls
 - Duplicating image layers reuses the same stored image data (no duplicate image blob writes)
 - Text layers with font, size, bold/italic, color, and alignment controls
 - Box layers for composition guides with resizable rectangle bounds plus stroke/fill controls
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
-- Images stored in IndexedDB; project metadata stored in localStorage
+- Images and mask assets stored in IndexedDB; project metadata stored in localStorage
 
 ### Sync
 

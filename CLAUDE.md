@@ -54,6 +54,8 @@
 - `src/tools/reference-board/types.ts`: shared TypeScript types (ProjectMeta, ImageLayer, TextLayer, CanvasLayer, Viewport)
 - `src/tools/reference-board/referenceBoard.ts`: pure project CRUD, project pin sorting, and layer ordering helpers (localStorage)
 - `src/tools/reference-board/db.ts`: IndexedDB wrapper using `idb` (images + layers stores)
+- `src/tools/reference-board/imageAssets.ts`: pure helpers for shared image and mask asset reference tracking
+- `src/tools/reference-board/backgroundMask.ts`: lazy-loaded segmentation pipeline helper for on-device image mask detection (MODNet-first with fallback models)
 - `src/tools/reference-board/sendToReferenceBoard.ts`: reusable integration helpers to resolve/create destination projects and append canvas images as new image layers
 - `src/tools/reference-board/ReferenceBoardPage.tsx`: projects list interface
 - `src/tools/reference-board/ReferenceBoardCanvasPage.tsx`: canvas editor (react-konva stage, image/text layers, transforms)

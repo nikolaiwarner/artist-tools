@@ -53,6 +53,8 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - Clipboard image paste (Ctrl/Cmd+V on desktop; paste after copying an image on mobile) creates a new image layer from pasted image data
 - Images are compressed for web (max 2400px, JPEG quality 0.85) on import
 - Duplicating an image layer reuses the same stored image data; only a new layer record is created
+- Image layers can optionally carry a non-destructive grayscale mask asset that hides pixels without altering the original image
+- Image layers can auto-generate a non-destructive mask using on-device image segmentation (tries MODNet first, then fallback segmentation models; browser inference, no backend)
 - Click/tap to select; click/tap empty canvas to deselect
 - Drag to reposition (single finger on mobile, click+drag on desktop)
 - **Desktop**: Konva Transformer handles on the selected layer for visual scale + rotate
@@ -61,6 +63,8 @@ Reference Board is an infinite-canvas reference image board for painters, illust
   - Flip horizontal / Flip vertical (icon buttons)
   - Opacity slider (0–100%)
   - Non-destructive crop: drag-handle overlay directly on canvas with rule-of-thirds grid lines; original image data is never modified
+  - Mask controls: detect mask automatically, draw/edit a grayscale mask directly over the image, or clear the current mask
+  - Detect mask shows an in-panel processing state while model download/inference is running, and temporarily disables mask actions
 
 ### Text Layers
 - Add via **text icon** toolbar button
@@ -107,6 +111,7 @@ Reference Board is designed with first-class support for both desktop and mobile
 ## Storage
 - **localStorage**: project metadata list (`ProjectMeta[]`)
 - **IndexedDB** (`reference-board` database): image dataUrls (keyed by `imageId`) and layer objects (keyed by `layerId`, indexed by `projectId`)
+- Mask assets use the same IndexedDB image store as base image assets and are referenced from individual image layers
 - Shared `imageId` references are counted once in storage estimates
 - Original images are preserved in IndexedDB; crop is a non-destructive mask only
 - Deleting a project removes all associated layers and images from IndexedDB
@@ -116,6 +121,8 @@ Reference Board is designed with first-class support for both desktop and mobile
 ```
 src/tools/reference-board/
   types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, ShapeLayer, CanvasLayer, Viewport)
+  imageAssets.ts                    — pure helpers for shared base-image/mask asset references
+  backgroundMask.ts                 — lazy-loaded segmentation-based background mask inference helper with model fallback
   referenceBoard.ts                 — pure project CRUD + layer-ordering helpers (no I/O except localStorage)
   referenceBoard.test.ts
   db.ts                             — IndexedDB wrapper using idb (images + layers)

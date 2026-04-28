@@ -36,6 +36,7 @@ export interface CropRect {
 export interface ImageLayer extends BaseLayer {
   type: 'image';
   imageId: string;
+  maskImageId?: string;
   width: number;
   height: number;
   scaleX: number;

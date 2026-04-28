@@ -1,4 +1,5 @@
 import {
+  type PointerEvent as ReactPointerEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -20,6 +21,11 @@ import {
   updateThumbnail,
   updateViewport,
 } from './referenceBoard';
+import {
+  collectUnreferencedImageAssetIds,
+  getReferencedImageAssetIds,
+} from './imageAssets';
+import { generateMaskDataUrlFromImage } from './backgroundMask';
 import {
   deleteImage,
   deleteLayer,
@@ -117,6 +123,14 @@ interface BoundsRect {
 interface SelectionResult {
   selectedId: string | null;
   multiSelectedIds: Set<string>;
+}
+
+interface MaskEditorState {
+  layerId: string;
+  imageDataUrl: string;
+  initialMaskDataUrl?: string;
+  width: number;
+  height: number;
 }
 
 const SELECTION_CLICK_SLOP = 4;
@@ -235,23 +249,7 @@ export function computeMultiDragPositions(
 }
 
 export function collectUnreferencedImageIds(deletedLayers: CanvasLayer[], remainingLayers: CanvasLayer[]): string[] {
-  const stillReferenced = new Set(
-    remainingLayers
-      .filter((layer): layer is ImageLayer => layer.type === 'image')
-      .map((layer) => layer.imageId),
-  );
-
-  const idsToDelete: string[] = [];
-  const seen = new Set<string>();
-  for (const layer of deletedLayers) {
-    if (layer.type !== 'image') continue;
-    if (stillReferenced.has(layer.imageId)) continue;
-    if (seen.has(layer.imageId)) continue;
-    seen.add(layer.imageId);
-    idsToDelete.push(layer.imageId);
-  }
-
-  return idsToDelete;
+  return collectUnreferencedImageAssetIds(deletedLayers, remainingLayers);
 }
 
 export function withTransformerNodesPreserved(
@@ -326,6 +324,62 @@ async function compressImage(dataUrl: string, maxDim = 2400, quality = 0.85): Pr
   return canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', quality);
 }
 
+async function normalizeMaskImage(dataUrl: string, width: number, height: number): Promise<string> {
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = dataUrl;
+  });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(width));
+  canvas.height = Math.max(1, Math.round(height));
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/png');
+}
+
+function createMaskedImageCanvas(
+  image: HTMLImageElement | HTMLCanvasElement,
+  mask: HTMLImageElement | HTMLCanvasElement,
+): HTMLCanvasElement {
+  const imageWidth = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
+  const imageHeight = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
+  const width = Math.max(1, Math.round(imageWidth));
+  const height = Math.max(1, Math.round(imageHeight));
+
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = width;
+  maskCanvas.height = height;
+  const maskCtx = maskCanvas.getContext('2d')!;
+  maskCtx.drawImage(mask, 0, 0, width, height);
+
+  const maskImageData = maskCtx.getImageData(0, 0, width, height);
+  for (let index = 0; index < maskImageData.data.length; index += 4) {
+    const red = maskImageData.data[index];
+    const green = maskImageData.data[index + 1];
+    const blue = maskImageData.data[index + 2];
+    const alpha = maskImageData.data[index + 3];
+    const luminance = Math.round((red + green + blue) / 3);
+    maskImageData.data[index] = 255;
+    maskImageData.data[index + 1] = 255;
+    maskImageData.data[index + 2] = 255;
+    maskImageData.data[index + 3] = Math.round((luminance / 255) * alpha);
+  }
+  maskCtx.putImageData(maskImageData, 0, 0);
+
+  const compositeCanvas = document.createElement('canvas');
+  compositeCanvas.width = width;
+  compositeCanvas.height = height;
+  const compositeCtx = compositeCanvas.getContext('2d')!;
+  compositeCtx.drawImage(image, 0, 0, width, height);
+  compositeCtx.globalCompositeOperation = 'destination-in';
+  compositeCtx.drawImage(maskCanvas, 0, 0, width, height);
+  compositeCtx.globalCompositeOperation = 'source-over';
+  return compositeCanvas;
+}
+
 // ── Image node (loads dataUrl from IndexedDB async) ──────────────────────────
 
 interface ImageNodeProps {
@@ -362,7 +416,14 @@ function ImageNode({
   const nodeRef = useRef<Konva.Image>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dataUrl = imageCache.get(layer.imageId) ?? '';
+  const maskDataUrl = layer.maskImageId ? imageCache.get(layer.maskImageId) ?? '' : '';
   const [img] = useImage(dataUrl);
+  const [maskImg] = useImage(maskDataUrl);
+  const renderedImage = useMemo(() => {
+    if (!img) return undefined;
+    if (!maskImg) return img;
+    return createMaskedImageCanvas(img, maskImg);
+  }, [img, maskImg]);
 
   useEffect(() => {
     if (isSelected && transformerRef.current && nodeRef.current) {
@@ -417,7 +478,7 @@ function ImageNode({
   return (
     <KonvaImage
       ref={nodeRef}
-      image={img}
+      image={renderedImage}
       x={layer.x}
       y={layer.y}
       width={(!isCropEditing && layer.crop) ? layer.crop.width * layer.width : layer.width}
@@ -734,6 +795,8 @@ export function ReferenceBoardCanvasPage() {
   const [loading, setLoading] = useState(true);
   const [canvasBackgroundColor, setCanvasBackgroundColor] = useState(DEFAULT_CANVAS_BACKGROUND_COLOR);
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
+  const [maskDetectingLayerId, setMaskDetectingLayerId] = useState<string | null>(null);
+  const [maskEditor, setMaskEditor] = useState<MaskEditorState | null>(null);
   const isSelectingRef = useRef(false);
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const multiDragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -758,12 +821,10 @@ export function ReferenceBoardCanvasPage() {
     setLayers(loadedLayers);
     const cache = new Map<string, string>();
     await Promise.all(
-      loadedLayers
-        .filter((l): l is ImageLayer => l.type === 'image')
-        .map(async (l) => {
-          const dataUrl = await loadImage(l.imageId);
-          if (dataUrl) cache.set(l.imageId, dataUrl);
-        })
+      Array.from(getReferencedImageAssetIds(loadedLayers)).map(async (imageAssetId) => {
+        const dataUrl = await loadImage(imageAssetId);
+        if (dataUrl) cache.set(imageAssetId, dataUrl);
+      })
     );
     setImageCache(cache);
     setLoading(false);
@@ -826,25 +887,21 @@ export function ReferenceBoardCanvasPage() {
         await deleteLayer(layer.id);
       }
 
-      const imageIdsToDelete = collectUnreferencedImageIds(deletedLayers, toLayers);
-      for (const imageId of imageIdsToDelete) {
-        await deleteImage(imageId);
+      const imageAssetIdsToDelete = collectUnreferencedImageIds(deletedLayers, toLayers);
+      for (const imageAssetId of imageAssetIdsToDelete) {
+        await deleteImage(imageAssetId);
       }
 
       for (const layer of toLayers) {
         await saveLayer(layer);
       }
 
-      const imageIdsInState = new Set(
-        toLayers
-          .filter((layer): layer is ImageLayer => layer.type === 'image')
-          .map((layer) => layer.imageId),
-      );
+      const imageAssetIdsInState = getReferencedImageAssetIds(toLayers);
 
-      for (const imageId of imageIdsInState) {
-        const dataUrl = imageCacheSnapshot.get(imageId);
+      for (const imageAssetId of imageAssetIdsInState) {
+        const dataUrl = imageCacheSnapshot.get(imageAssetId);
         if (dataUrl) {
-          await saveImage(imageId, dataUrl);
+          await saveImage(imageAssetId, dataUrl);
         }
       }
     });
@@ -1311,6 +1368,162 @@ export function ReferenceBoardCanvasPage() {
     updateLayer(id, { flipY: !layer.flipY } as Partial<CanvasLayer>);
   }
 
+  async function startMaskDraw(layerId: string) {
+    const layer = layersRef.current.find((candidate) => candidate.id === layerId) as ImageLayer | undefined;
+    if (!layer || layer.type !== 'image') return;
+    if (maskDetectingLayerId) return;
+
+    const imageDataUrl = imageCache.get(layer.imageId);
+    if (!imageDataUrl) return;
+
+    const width = Math.max(1, Math.round(layer.width));
+    const height = Math.max(1, Math.round(layer.height));
+    const currentMaskDataUrl = layer.maskImageId ? imageCache.get(layer.maskImageId) : undefined;
+    const initialMaskDataUrl = currentMaskDataUrl
+      ? await normalizeMaskImage(currentMaskDataUrl, width, height)
+      : undefined;
+
+    setMaskEditor({
+      layerId,
+      imageDataUrl,
+      initialMaskDataUrl,
+      width,
+      height,
+    });
+  }
+
+  async function handleApplyDrawnMask(maskDataUrl: string) {
+    const editorState = maskEditor;
+    if (!editorState) return;
+
+    const layer = layersRef.current.find((candidate) => candidate.id === editorState.layerId) as ImageLayer | undefined;
+    if (!layer || layer.type !== 'image') {
+      setMaskEditor(null);
+      return;
+    }
+
+    saveToHistory();
+
+    const normalizedMaskDataUrl = await normalizeMaskImage(maskDataUrl, layer.width, layer.height);
+    const maskImageId = newId();
+
+    await saveImage(maskImageId, normalizedMaskDataUrl);
+    setImageCache((currentCache) => new Map(currentCache).set(maskImageId, normalizedMaskDataUrl));
+
+    setLayers((prev) => {
+      const next = prev.map((candidate) => (
+        candidate.id === editorState.layerId
+          ? ({ ...candidate, maskImageId } as CanvasLayer)
+          : candidate
+      ));
+      const updatedLayer = next.find((candidate) => candidate.id === editorState.layerId);
+      if (updatedLayer) {
+        void saveLayer(updatedLayer);
+      }
+
+      const imageAssetIdsToDelete = collectUnreferencedImageAssetIds([layer], next);
+      for (const imageAssetId of imageAssetIdsToDelete) {
+        queueDbMutation(() => deleteImage(imageAssetId));
+        setImageCache((currentCache) => {
+          const nextCache = new Map(currentCache);
+          nextCache.delete(imageAssetId);
+          return nextCache;
+        });
+      }
+
+      scheduleThumbnail();
+      return next;
+    });
+
+    setMaskEditor(null);
+  }
+
+  function handleCancelMaskDraw() {
+    setMaskEditor(null);
+  }
+
+  async function handleDetectMask(layerId: string) {
+    if (maskDetectingLayerId) return;
+
+    const layer = layersRef.current.find((candidate) => candidate.id === layerId) as ImageLayer | undefined;
+    if (!layer || layer.type !== 'image') return;
+    const imageDataUrl = imageCache.get(layer.imageId);
+    if (!imageDataUrl) return;
+
+    setMaskDetectingLayerId(layerId);
+
+    try {
+      const maskDataUrl = await generateMaskDataUrlFromImage(imageDataUrl);
+      const maskImageId = newId();
+
+      saveToHistory();
+
+      await saveImage(maskImageId, maskDataUrl);
+      setImageCache((currentCache) => new Map(currentCache).set(maskImageId, maskDataUrl));
+
+      setLayers((prev) => {
+        const next = prev.map((candidate) => (
+          candidate.id === layerId
+            ? ({ ...candidate, maskImageId } as CanvasLayer)
+            : candidate
+        ));
+        const updatedLayer = next.find((candidate) => candidate.id === layerId);
+        if (updatedLayer) {
+          void saveLayer(updatedLayer);
+        }
+
+        const imageAssetIdsToDelete = collectUnreferencedImageAssetIds([layer], next);
+        for (const imageAssetId of imageAssetIdsToDelete) {
+          queueDbMutation(() => deleteImage(imageAssetId));
+          setImageCache((currentCache) => {
+            const nextCache = new Map(currentCache);
+            nextCache.delete(imageAssetId);
+            return nextCache;
+          });
+        }
+
+        scheduleThumbnail();
+        return next;
+      });
+    } catch (error) {
+      console.error('Reference Board mask detection failed', error);
+    } finally {
+      setMaskDetectingLayerId((current) => (current === layerId ? null : current));
+    }
+  }
+
+  function handleClearMask(layerId: string) {
+    const layer = layers.find((candidate) => candidate.id === layerId) as ImageLayer | undefined;
+    if (!layer?.maskImageId) return;
+
+    saveToHistory();
+
+    setLayers((prev) => {
+      const next = prev.map((candidate) => (
+        candidate.id === layerId
+          ? ({ ...candidate, maskImageId: undefined } as CanvasLayer)
+          : candidate
+      ));
+      const updatedLayer = next.find((candidate) => candidate.id === layerId);
+      if (updatedLayer) {
+        void saveLayer(updatedLayer);
+      }
+
+      const imageAssetIdsToDelete = collectUnreferencedImageAssetIds([layer], next);
+      for (const imageAssetId of imageAssetIdsToDelete) {
+        queueDbMutation(() => deleteImage(imageAssetId));
+        setImageCache((currentCache) => {
+          const nextCache = new Map(currentCache);
+          nextCache.delete(imageAssetId);
+          return nextCache;
+        });
+      }
+
+      scheduleThumbnail();
+      return next;
+    });
+  }
+
   // ── File import ───────────────────────────────────────────────────────────
 
   async function importFiles(files: FileList | File[]) {
@@ -1744,6 +1957,10 @@ export function ReferenceBoardCanvasPage() {
             onFlipH={selectedLayer.type === 'image' ? () => handleFlipH(selectedLayer.id) : undefined}
             onFlipV={selectedLayer.type === 'image' ? () => handleFlipV(selectedLayer.id) : undefined}
             onCropStart={selectedLayer.type === 'image' ? () => startCrop(selectedLayer.id) : undefined}
+            onMaskDrawStart={selectedLayer.type === 'image' ? () => void startMaskDraw(selectedLayer.id) : undefined}
+            onClearMask={selectedLayer.type === 'image' ? () => handleClearMask(selectedLayer.id) : undefined}
+            onDetectMask={selectedLayer.type === 'image' ? () => void handleDetectMask(selectedLayer.id) : undefined}
+            isDetectingMask={selectedLayer.type === 'image' && maskDetectingLayerId === selectedLayer.id}
           />
         )}
 
@@ -1794,6 +2011,18 @@ export function ReferenceBoardCanvasPage() {
         </div>
       )}
 
+      {/* Mask drawing editor */}
+      {maskEditor && (
+        <MaskDrawEditor
+          imageDataUrl={maskEditor.imageDataUrl}
+          initialMaskDataUrl={maskEditor.initialMaskDataUrl}
+          width={maskEditor.width}
+          height={maskEditor.height}
+          onApply={(nextMaskDataUrl) => void handleApplyDrawnMask(nextMaskDataUrl)}
+          onCancel={handleCancelMaskDraw}
+        />
+      )}
+
       {/* Context menu */}
       {contextMenu && (
         <ContextMenu
@@ -1814,6 +2043,197 @@ export function ReferenceBoardCanvasPage() {
         />
       )}
     </section>
+  );
+}
+
+interface MaskDrawEditorProps {
+  imageDataUrl: string;
+  initialMaskDataUrl?: string;
+  width: number;
+  height: number;
+  onApply: (maskDataUrl: string) => void;
+  onCancel: () => void;
+}
+
+function MaskDrawEditor({
+  imageDataUrl,
+  initialMaskDataUrl,
+  width,
+  height,
+  onApply,
+  onCancel,
+}: MaskDrawEditorProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isDrawingRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
+  const [brushSize, setBrushSize] = useState(24);
+  const [mode, setMode] = useState<'hide' | 'reveal'>('hide');
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let canceled = false;
+
+    async function initializeMaskCanvas() {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) return;
+
+      if (!initialMaskDataUrl) {
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        if (!canceled) setReady(true);
+        return;
+      }
+
+      const maskImage = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = initialMaskDataUrl;
+      }).catch(() => null);
+
+      if (!maskImage) {
+        context.fillStyle = '#ffffff';
+        context.fillRect(0, 0, width, height);
+        if (!canceled) setReady(true);
+        return;
+      }
+
+      context.clearRect(0, 0, width, height);
+      context.drawImage(maskImage, 0, 0, width, height);
+      if (!canceled) setReady(true);
+    }
+
+    void initializeMaskCanvas();
+
+    return () => {
+      canceled = true;
+    };
+  }, [height, initialMaskDataUrl, width]);
+
+  function eventToCanvasPoint(event: ReactPointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / Math.max(1, rect.width);
+    const scaleY = canvas.height / Math.max(1, rect.height);
+    const x = (event.clientX - rect.left) * scaleX;
+    const y = (event.clientY - rect.top) * scaleY;
+    return {
+      x: Math.max(0, Math.min(canvas.width, x)),
+      y: Math.max(0, Math.min(canvas.height, y)),
+    };
+  }
+
+  function drawStroke(from: { x: number; y: number }, to: { x: number; y: number }) {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext('2d');
+    if (!context) return;
+
+    context.save();
+    context.strokeStyle = mode === 'hide' ? '#000000' : '#ffffff';
+    context.lineWidth = brushSize;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+    context.restore();
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (!ready) return;
+    isDrawingRef.current = true;
+    const point = eventToCanvasPoint(event);
+    lastPointRef.current = point;
+    drawStroke(point, point);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (!isDrawingRef.current) return;
+    const point = eventToCanvasPoint(event);
+    const previousPoint = lastPointRef.current ?? point;
+    drawStroke(previousPoint, point);
+    lastPointRef.current = point;
+  }
+
+  function handlePointerUp(event: ReactPointerEvent<HTMLCanvasElement>) {
+    if (isDrawingRef.current) {
+      isDrawingRef.current = false;
+      lastPointRef.current = null;
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleApply() {
+    const canvas = canvasRef.current;
+    if (!canvas || !ready) return;
+    onApply(canvas.toDataURL('image/png'));
+  }
+
+  return (
+    <div className="refboard-mask-editor-backdrop">
+      <div className="refboard-mask-editor" role="dialog" aria-label="Mask Editor" aria-modal="true">
+        <div className="refboard-mask-editor-head">
+          <p className="refboard-panel-eyebrow" style={{ marginBottom: 0 }}>Mask Editor</p>
+          <p style={{ fontSize: '0.8rem' }}>Paint black to hide, white to reveal.</p>
+        </div>
+
+        <div className="refboard-mask-editor-toolbar">
+          <button
+            className={mode === 'hide' ? 'refboard-toggle-active' : ''}
+            onClick={() => setMode('hide')}
+            type="button"
+          >
+            Hide
+          </button>
+          <button
+            className={mode === 'reveal' ? 'refboard-toggle-active' : ''}
+            onClick={() => setMode('reveal')}
+            type="button"
+          >
+            Reveal
+          </button>
+          <label className="refboard-mask-editor-brush">
+            Brush
+            <input
+              type="range"
+              min={4}
+              max={96}
+              step={2}
+              value={brushSize}
+              onChange={(event) => setBrushSize(parseInt(event.target.value, 10))}
+            />
+            <span>{brushSize}px</span>
+          </label>
+        </div>
+
+        <div className="refboard-mask-editor-stage">
+          <img src={imageDataUrl} alt="Mask editing base" draggable={false} />
+          <canvas
+            ref={canvasRef}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+          />
+        </div>
+
+        <div className="refboard-mask-editor-actions">
+          <button onClick={onCancel} type="button">Cancel</button>
+          <button onClick={handleApply} type="button" className="refboard-crop-apply-btn" disabled={!ready}>Apply Mask</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

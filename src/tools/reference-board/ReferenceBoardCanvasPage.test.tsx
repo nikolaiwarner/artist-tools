@@ -11,6 +11,7 @@ import {
   saveImage,
   saveLayer,
 } from './db';
+import { generateMaskDataUrlFromImage } from './backgroundMask';
 import { updateProject } from './referenceBoard';
 
 vi.mock('react-konva', () => ({
@@ -51,6 +52,10 @@ vi.mock('./db', () => ({
   deleteLayer: vi.fn().mockResolvedValue(undefined),
   deleteImage: vi.fn().mockResolvedValue(undefined),
   deleteProjectData: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('./backgroundMask', () => ({
+  generateMaskDataUrlFromImage: vi.fn().mockResolvedValue('data:image/png;base64,detected-mask'),
 }));
 
 vi.mock('./referenceBoard', async (importOriginal) => {
@@ -201,6 +206,198 @@ describe('ReferenceBoardCanvasPage', () => {
 
     expect(saveImage).not.toHaveBeenCalled();
     expect(saveLayer).toHaveBeenCalled();
+  });
+
+  it('loads both base image and mask assets for a masked image layer', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        maskImageId: 'mask-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+    vi.mocked(loadImage).mockImplementation(async (imageId: string) => `data:image/png;base64,${imageId}`);
+
+    renderCanvas();
+
+    await screen.findByTestId('konva-image');
+
+    await vi.waitFor(() => {
+      expect(loadImage).toHaveBeenCalledWith('img-1');
+      expect(loadImage).toHaveBeenCalledWith('mask-1');
+    });
+  });
+
+  it('clears a selected image mask from the layer panel', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        maskImageId: 'mask-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+    vi.mocked(loadImage).mockImplementation(async (imageId: string) => `data:image/png;base64,${imageId}`);
+
+    renderCanvas();
+
+    const imageNode = await screen.findByTestId('konva-image');
+    fireEvent.click(imageNode);
+
+    const clearMaskButton = await screen.findByTitle(/clear image mask/i);
+    fireEvent.click(clearMaskButton);
+
+    expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'img-layer-1',
+      maskImageId: undefined,
+    }));
+  });
+
+  it('detects and applies a mask to the selected image layer', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+    vi.mocked(loadImage).mockResolvedValue('data:image/png;base64,base-image');
+
+    renderCanvas();
+
+    const imageNode = await screen.findByTestId('konva-image');
+    fireEvent.click(imageNode);
+
+    const detectMaskButton = await screen.findByTitle(/detect image mask/i);
+    fireEvent.click(detectMaskButton);
+
+    await vi.waitFor(() => {
+      expect(generateMaskDataUrlFromImage).toHaveBeenCalledWith('data:image/png;base64,base-image');
+      expect(saveImage).toHaveBeenCalledWith(expect.any(String), 'data:image/png;base64,detected-mask');
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'img-layer-1',
+        maskImageId: expect.any(String),
+      }));
+    });
+  });
+
+  it('shows a processing state while detecting a mask', async () => {
+    let resolveDetection: ((value: string) => void) | undefined;
+
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+    vi.mocked(loadImage).mockResolvedValue('data:image/png;base64,base-image');
+    vi.mocked(generateMaskDataUrlFromImage).mockImplementationOnce(
+      () => new Promise((resolve) => {
+        resolveDetection = resolve;
+      })
+    );
+
+    renderCanvas();
+
+    const imageNode = await screen.findByTestId('konva-image');
+    fireEvent.click(imageNode);
+
+    const detectMaskButton = await screen.findByTitle(/detect image mask/i);
+    fireEvent.click(detectMaskButton);
+
+    expect(await screen.findByRole('status')).toHaveTextContent(/detecting mask/i);
+    expect(screen.getByTitle(/detecting image mask/i)).toBeDisabled();
+    expect(screen.getByTitle(/draw image mask/i)).toBeDisabled();
+
+    resolveDetection?.('data:image/png;base64,detected-mask');
+
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+    expect(screen.getByTitle(/detect image mask/i)).not.toBeDisabled();
+  });
+
+  it('opens the mask drawing editor for a selected image layer', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+    vi.mocked(loadImage).mockResolvedValue('data:image/png;base64,base-image');
+
+    renderCanvas();
+
+    const imageNode = await screen.findByTestId('konva-image');
+    fireEvent.click(imageNode);
+
+    const drawMaskButton = await screen.findByTitle(/draw image mask/i);
+    fireEvent.click(drawMaskButton);
+
+    expect(await screen.findByRole('dialog', { name: /mask editor/i })).toBeInTheDocument();
   });
 
   it('does not delete shared image data when deleting one referencing layer', async () => {
