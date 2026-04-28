@@ -1088,11 +1088,25 @@ p {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
   padding: 10px 12px;
   border: 1px solid var(--stroke);
   border-radius: 6px;
   background: var(--surface);
   box-shadow: var(--shadow);
+}
+
+.refboard-projects-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.refboard-project-search input {
+  min-width: 240px;
+  height: 34px;
 }
 
 .refboard-new-btn {
@@ -1897,6 +1911,20 @@ p {
 }
 
 @media (max-width: 780px) {
+  .refboard-projects-controls {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .refboard-project-search {
+    flex: 1;
+  }
+
+  .refboard-project-search input {
+    min-width: 0;
+    width: 100%;
+  }
+
   .refboard-project-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
   }

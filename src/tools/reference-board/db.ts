@@ -69,6 +69,22 @@ export async function loadLayersForProject(projectId: string): Promise<CanvasLay
   return db.getAllFromIndex(LAYERS_STORE, 'by-project', projectId);
 }
 
+export async function buildProjectTextSearchIndex(projectIds: string[]): Promise<Record<string, string>> {
+  if (projectIds.length === 0) return {};
+
+  const db = await getDB();
+  const entries = await Promise.all(projectIds.map(async (projectId) => {
+    const layers = await db.getAllFromIndex(LAYERS_STORE, 'by-project', projectId);
+    const text = layers
+      .filter((layer) => layer.type === 'text')
+      .map((layer) => layer.text)
+      .join(' ');
+    return [projectId, text] as const;
+  }));
+
+  return Object.fromEntries(entries);
+}
+
 export async function deleteLayer(layerId: string): Promise<void> {
   const db = await getDB();
   await db.delete(LAYERS_STORE, layerId);

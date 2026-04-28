@@ -135,6 +135,7 @@ Reference Board is an infinite-canvas reference image board. Create projects, im
 Key features:
 - Multiple named projects, each with its own canvas
 - Optional project pinning so selected boards always sort to the top of the projects list
+- Project-list search that filters by project name and text-layer content
 - Auto-generated project thumbnails and per-project total storage estimates on cards (localStorage metadata/thumbnail + IndexedDB layer/image data)
 - Exiting a project back to the projects list immediately refreshes that project's thumbnail
 - Pan (scroll / space+drag) and zoom (ctrl+scroll / trackpad pinch)

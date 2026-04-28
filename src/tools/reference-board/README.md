@@ -9,6 +9,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - Each project has its own infinite canvas
 - The projects list is a top-level tool page and includes the shared app menu trigger in the hero area
 - Projects can be pinned so they always sort ahead of unpinned projects
+- Project list includes search that matches both project names and text-layer content stored inside each project
 - Project thumbnails are auto-generated from canvas content (after a 2 second idle period) and shown in the project grid
   - Thumbnails include the canvas background color for better visual representation
   - Exiting a project to the projects list saves a fresh thumbnail immediately (does not wait for the idle debounce)
@@ -133,7 +134,7 @@ src/tools/reference-board/
   backgroundMask.ts                 — lazy-loaded segmentation-based background mask inference helper with model fallback
   referenceBoard.ts                 — pure project CRUD + layer-ordering helpers (no I/O except localStorage)
   referenceBoard.test.ts
-  db.ts                             — IndexedDB wrapper using idb (images + layers)
+  db.ts                             — IndexedDB wrapper using idb (images + layers), plus project text-layer search indexing helper
   db.test.ts
   ReferenceBoardPage.tsx            — projects list (create, rename, delete, thumbnail grid, storage readout)
   ReferenceBoardPage.test.tsx

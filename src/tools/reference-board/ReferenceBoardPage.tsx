@@ -4,7 +4,7 @@ import { Save, Pin, PinOff, Pencil, Trash2, MoreHorizontal, Copy } from 'lucide-
 import { AppMenuButton } from '../../components/AppMenuButton';
 import { listProjects, createProject, updateProject, deleteProject, duplicateProject } from './referenceBoard';
 import type { ProjectMeta } from './types';
-import { deleteProjectData, duplicateProjectData, estimateProjectStorageBytes } from './db';
+import { deleteProjectData, duplicateProjectData, estimateProjectStorageBytes, buildProjectTextSearchIndex } from './db';
 import { SYNC_APPLIED_EVENT } from '../../sync/syncData';
 
 function estimateProjectMetaBytes(project: ProjectMeta): number {
@@ -20,6 +20,8 @@ function formatStorage(bytes: number): string {
 export function ReferenceBoardPage() {
   const [projects, setProjects] = useState<ProjectMeta[]>(() => listProjects());
   const [projectStorage, setProjectStorage] = useState<Record<string, number>>({});
+  const [projectTextIndex, setProjectTextIndex] = useState<Record<string, string>>({});
+  const [searchQuery, setSearchQuery] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -63,6 +65,38 @@ export function ReferenceBoardPage() {
     return () => {
       active = false;
     };
+  }, [projects]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadProjectTextIndex() {
+      if (projects.length === 0) {
+        if (active) setProjectTextIndex({});
+        return;
+      }
+
+      const index = await buildProjectTextSearchIndex(projects.map((project) => project.id));
+      if (!active) return;
+      setProjectTextIndex(index);
+    }
+
+    void loadProjectTextIndex();
+
+    return () => {
+      active = false;
+    };
+  }, [projects]);
+
+  useEffect(() => {
+    function onDBChange() {
+      void buildProjectTextSearchIndex(projects.map((project) => project.id)).then((index) => {
+        setProjectTextIndex(index);
+      });
+    }
+
+    window.addEventListener('artist-tools:reference-board-db-change', onDBChange);
+    return () => window.removeEventListener('artist-tools:reference-board-db-change', onDBChange);
   }, [projects]);
 
   useEffect(() => {
@@ -143,6 +177,14 @@ export function ReferenceBoardPage() {
     setProjects(listProjects());
   }
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredProjects = normalizedSearch
+    ? projects.filter((project) => {
+      if (project.name.toLowerCase().includes(normalizedSearch)) return true;
+      return (projectTextIndex[project.id] ?? '').toLowerCase().includes(normalizedSearch);
+    })
+    : projects;
+
   return (
     <section className="tool-layout">
       <div className="tool-hero">
@@ -160,9 +202,22 @@ export function ReferenceBoardPage() {
 
       <div className="refboard-projects-header">
         <h2 style={{ margin: 0 }}>Projects</h2>
-        <button className="refboard-new-btn" onClick={handleCreate}>
-          + New project
-        </button>
+        <div className="refboard-projects-controls">
+          <label className="refboard-project-search" htmlFor="refboard-project-search-input">
+            <span className="sr-only">Search projects</span>
+            <input
+              id="refboard-project-search-input"
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search"
+              aria-label="Search projects"
+            />
+          </label>
+          <button className="refboard-new-btn" onClick={handleCreate}>
+            + New project
+          </button>
+        </div>
       </div>
 
       {projects.length === 0 ? (
@@ -170,9 +225,13 @@ export function ReferenceBoardPage() {
           <p>No projects yet.</p>
           <button onClick={handleCreate}>Create your first project</button>
         </div>
+      ) : filteredProjects.length === 0 ? (
+        <div className="refboard-empty">
+          <p>No projects match your search.</p>
+        </div>
       ) : (
         <div className="refboard-project-grid">
-          {projects.map((project) => (
+          {filteredProjects.map((project) => (
             <article key={project.id} className="refboard-project-card">
               {project.pinned ? (
                 <span className="refboard-pin-overlay" title="Pinned project" aria-hidden="true">

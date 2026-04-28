@@ -4,11 +4,13 @@ import { MemoryRouter } from 'react-router-dom';
 import { AppShellProvider } from '../../components/AppShellContext';
 import { ReferenceBoardPage } from './ReferenceBoardPage';
 import { estimateProjectStorageBytes } from './db';
+import { buildProjectTextSearchIndex } from './db';
 
 vi.mock('./db', () => ({
   deleteProjectData: vi.fn().mockResolvedValue(undefined),
   duplicateProjectData: vi.fn().mockResolvedValue(undefined),
   estimateProjectStorageBytes: vi.fn().mockResolvedValue(2048),
+  buildProjectTextSearchIndex: vi.fn().mockResolvedValue({}),
 }));
 
 const makeStorage = () => {
@@ -34,6 +36,7 @@ function stubWindow(storage: ReturnType<typeof makeStorage>, extra: Record<strin
 
 beforeEach(() => {
   stubWindow(makeStorage());
+  vi.mocked(buildProjectTextSearchIndex).mockResolvedValue({});
 });
 
 function renderPage() {
@@ -217,5 +220,88 @@ describe('ReferenceBoardPage', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /duplicate my board/i }));
 
     expect(screen.getAllByRole('heading', { level: 3 }).map((n) => n.textContent)).toContain('My Board Copy');
+  });
+
+  it('filters projects by project name', async () => {
+    const storage = makeStorage();
+    const projects = [
+      {
+        id: 'p1',
+        name: 'Portrait Session',
+        createdAt: 1000,
+        updatedAt: 2000,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+      {
+        id: 'p2',
+        name: 'Landscape Study',
+        createdAt: 1000,
+        updatedAt: 3000,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+    ];
+    storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
+
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText(/search projects/i), { target: { value: 'portrait' } });
+
+    expect(screen.getByText('Portrait Session')).toBeInTheDocument();
+    expect(screen.queryByText('Landscape Study')).not.toBeInTheDocument();
+  });
+
+  it('filters projects by text-layer content', async () => {
+    const storage = makeStorage();
+    const projects = [
+      {
+        id: 'p1',
+        name: 'Board One',
+        createdAt: 1000,
+        updatedAt: 2000,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+      {
+        id: 'p2',
+        name: 'Board Two',
+        createdAt: 1000,
+        updatedAt: 3000,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+    ];
+    storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
+    vi.mocked(buildProjectTextSearchIndex).mockResolvedValue({
+      p1: 'Warm light notes',
+      p2: 'Cold shadow setup',
+    });
+
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText(/search projects/i), { target: { value: 'shadow' } });
+
+    expect(await screen.findByText('Board Two')).toBeInTheDocument();
+    expect(screen.queryByText('Board One')).not.toBeInTheDocument();
+  });
+
+  it('shows an empty search state when no projects match', () => {
+    const storage = makeStorage();
+    const projects = [
+      {
+        id: 'p1',
+        name: 'Figure Basics',
+        createdAt: 1000,
+        updatedAt: 2000,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+    ];
+    storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
+
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText(/search projects/i), { target: { value: 'nomatch' } });
+
+    expect(screen.getByText(/no projects match your search/i)).toBeInTheDocument();
   });
 });

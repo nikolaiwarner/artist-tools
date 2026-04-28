@@ -9,6 +9,7 @@ import {
   deleteProjectData,
   duplicateProjectData,
   estimateProjectStorageBytes,
+  buildProjectTextSearchIndex,
   exportAllDBData,
   importAllDBData,
   resetDBForTesting,
@@ -156,6 +157,27 @@ describe('estimateProjectStorageBytes', () => {
       enc.encode(dataUrl).length;
 
     expect(bytes).toBe(expected);
+  });
+});
+
+describe('buildProjectTextSearchIndex', () => {
+  it('indexes text-layer content by project', async () => {
+    await saveLayer(makeTextLayer({ id: 'txt-1', projectId: 'proj-1', text: 'Warm light note' }));
+    await saveLayer(makeTextLayer({ id: 'txt-2', projectId: 'proj-2', text: 'Shadow structure' }));
+
+    const index = await buildProjectTextSearchIndex(['proj-1', 'proj-2']);
+
+    expect(index['proj-1']).toContain('Warm light note');
+    expect(index['proj-2']).toContain('Shadow structure');
+  });
+
+  it('ignores non-text layers for search text', async () => {
+    await saveImage('img-1', 'data:image/png;base64,abc');
+    await saveLayer(makeImageLayer({ id: 'img-1', projectId: 'proj-1', imageId: 'img-1' }));
+
+    const index = await buildProjectTextSearchIndex(['proj-1']);
+
+    expect(index['proj-1']).toBe('');
   });
 });
 

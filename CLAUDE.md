@@ -14,6 +14,7 @@
 - **Reference Board** additionally uses IndexedDB (via the `idb` package) for storing images and canvas layers.
 - **Reference Board** saves the latest project thumbnail immediately when leaving a canvas back to the projects list.
 - **Reference Board** can capture still images directly from the device camera inside the canvas toolbar.
+- **Reference Board** projects list supports search by project name and text-layer content.
 - The app is intended for GitHub Pages deployment.
 - Routing uses a hash router so tool pages work on static hosting.
 - The shared UI theme is intentionally barebones and compact to maximize visible tool workspace.
