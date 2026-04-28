@@ -1697,6 +1697,57 @@ p {
   background: var(--accent-deep) !important;
 }
 
+/* Camera capture modal */
+
+.refboard-camera-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.refboard-camera-dialog {
+  width: min(92vw, 520px);
+  border: 1px solid var(--stroke);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.refboard-camera-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.refboard-camera-controls {
+  margin-bottom: 0;
+}
+
+.refboard-camera-source {
+  display: grid;
+}
+
+.refboard-camera-frame {
+  width: 100%;
+  max-height: min(62vh, 420px);
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  background: #f6f6f3;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Mask editor */
 
 .refboard-mask-editor-backdrop {

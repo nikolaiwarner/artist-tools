@@ -208,6 +208,82 @@ describe('ReferenceBoardCanvasPage', () => {
     expect(await screen.findByTitle(/import images/i)).toBeInTheDocument();
   });
 
+  it('captures an image from camera and imports it as a layer', async () => {
+    const originalImage = globalThis.Image;
+    const stopTrack = vi.fn();
+    const getUserMedia = vi.fn().mockResolvedValue({
+      getTracks: () => [{ stop: stopTrack }],
+    });
+    Object.defineProperty(globalThis.navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia },
+    });
+
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
+    const toDataUrlSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValue('data:image/png;base64,camera-capture');
+
+    class MockImage {
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      naturalWidth = 720;
+      naturalHeight = 1280;
+
+      set src(_value: string) {
+        this.onload?.();
+      }
+    }
+
+    vi.stubGlobal('Image', MockImage as unknown as typeof Image);
+
+    const { container } = renderCanvas();
+
+    fireEvent.click(await screen.findByRole('button', { name: /capture image from camera/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /toggle camera/i }));
+
+    const video = container.querySelector('video');
+    expect(video).not.toBeNull();
+    Object.defineProperty(video, 'videoWidth', {
+      configurable: true,
+      value: 720,
+    });
+    Object.defineProperty(video, 'videoHeight', {
+      configurable: true,
+      value: 1280,
+    });
+    fireEvent.loadedMetadata(video as HTMLVideoElement);
+
+    const captureButton = await screen.findByRole('button', { name: /capture photo/i });
+    await vi.waitFor(() => {
+      expect(captureButton).toBeEnabled();
+    });
+    fireEvent.click(captureButton);
+
+    await vi.waitFor(() => {
+      expect(saveImage).toHaveBeenCalled();
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+        projectId: 'proj-1',
+        type: 'image',
+      }));
+    });
+
+    expect(getUserMedia).toHaveBeenCalledWith({
+      video: {
+        facingMode: { ideal: 'environment' },
+      },
+    });
+    expect(stopTrack).toHaveBeenCalledTimes(1);
+
+    vi.stubGlobal('Image', originalImage);
+    playSpy.mockRestore();
+    getContextSpy.mockRestore();
+    toDataUrlSpy.mockRestore();
+  });
+
   it('renders text button', async () => {
     renderCanvas();
     expect(await screen.findByTitle(/add text layer/i)).toBeInTheDocument();

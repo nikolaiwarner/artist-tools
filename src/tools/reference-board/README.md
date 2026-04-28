@@ -54,6 +54,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 
 ### Image Layers
 - Import via the **image icon** toolbar button or drag-and-drop
+- Capture a still directly from the device camera via the **camera icon** toolbar button
 - On mobile, tap the image icon or drag a file from another app onto the canvas
 - Clipboard image paste (Ctrl/Cmd+V on desktop; paste after copying an image on mobile) creates a new image layer from pasted image data
 - Images are compressed for web (max 2400px, JPEG quality 0.85) on import
@@ -111,6 +112,7 @@ Reference Board is designed with first-class support for both desktop and mobile
 
 ### Files & Image Import on Mobile
 - Tap the **image icon** in the toolbar to open file picker
+- Tap the **camera icon** in the toolbar to open camera capture and add a still frame as a new layer
 - Drag & drop images from file manager or other apps
 - Copy images from Photos app and paste them onto the canvas
 
@@ -137,6 +139,7 @@ src/tools/reference-board/
   ReferenceBoardPage.test.tsx
   ReferenceBoardCanvasPage.tsx      — canvas editor (main page)
   ReferenceBoardCanvasPage.test.tsx
+  ../components/CameraSourcePanel.tsx — shared camera source/capture panel used by Reference Board and Camera Tonal Study
   components/
     CanvasStage.tsx                 — Konva Stage + pan/zoom interactions
     ContextMenu.tsx                 — right-click layer actions

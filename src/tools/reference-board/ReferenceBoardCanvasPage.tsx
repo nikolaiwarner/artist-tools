@@ -35,12 +35,13 @@ import {
   saveImage,
   saveLayer,
 } from './db';
-import { ArrowLeft, ImagePlus, Type, Square, Download, Undo2, Redo2 } from 'lucide-react';
+import { ArrowLeft, ImagePlus, Type, Square, Download, Undo2, Redo2, Camera } from 'lucide-react';
 import type { CanvasLayer, CropRect, ImageLayer, ShapeLayer, TextLayer, Viewport } from './types';
 import { CanvasStage } from './components/CanvasStage';
 import { ContextMenu } from './components/ContextMenu';
 import { LayerPanel } from './components/LayerPanel';
 import { TextEditor } from './components/TextEditor';
+import { CameraSourcePanel, type CameraFacingMode } from '../../components/CameraSourcePanel';
 import { SYNC_APPLIED_EVENT, type SyncAppliedDetail } from '../../sync/syncData';
 
 const DEFAULT_CANVAS_BACKGROUND_COLOR = '#1f1f1f';
@@ -841,6 +842,8 @@ export function ReferenceBoardCanvasPage() {
   const [selectionBox, setSelectionBox] = useState<SelectionBox | null>(null);
   const [maskDetectingLayerId, setMaskDetectingLayerId] = useState<string | null>(null);
   const [maskEditor, setMaskEditor] = useState<MaskEditorState | null>(null);
+  const [showCameraCapture, setShowCameraCapture] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>('environment');
   const isSelectingRef = useRef(false);
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const multiDragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -1632,20 +1635,23 @@ export function ReferenceBoardCanvasPage() {
 
   // ── File import ───────────────────────────────────────────────────────────
 
-  async function importFiles(files: FileList | File[]) {
+  async function importImageDataUrls(rawDataUrls: string[]) {
+    if (rawDataUrls.length === 0) {
+      return;
+    }
+
     saveToHistory();
     const stage = stageRef.current;
     const centerX = stage ? (stage.width() / 2 - viewport.x) / viewport.scale : 300;
     const centerY = stage ? (stage.height() / 2 - viewport.y) / viewport.scale : 200;
+    let nextLayerZIndex = nextZIndex(layersRef.current);
 
-    for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) continue;
-      const rawDataUrl = await readFileAsDataUrl(file);
+    for (const rawDataUrl of rawDataUrls) {
       const dataUrl = await compressImage(rawDataUrl);
       const { width, height } = await getImageDimensions(dataUrl);
       const imageId = newId();
       await saveImage(imageId, dataUrl);
-      setImageCache((c) => new Map(c).set(imageId, dataUrl));
+      setImageCache((currentCache) => new Map(currentCache).set(imageId, dataUrl));
 
       const layer: ImageLayer = {
         id: newId(),
@@ -1658,17 +1664,34 @@ export function ReferenceBoardCanvasPage() {
         height,
         rotation: 0,
         opacity: 1,
-        zIndex: nextZIndex(layers),
+        zIndex: nextLayerZIndex,
         scaleX: 1,
         scaleY: 1,
         flipX: false,
         flipY: false,
       };
 
+      nextLayerZIndex += 1;
       setLayers((prev) => [...prev, layer]);
       await saveLayer(layer);
       scheduleThumbnail();
     }
+  }
+
+  async function importFiles(files: FileList | File[]) {
+    const rawDataUrls: string[] = [];
+
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith('image/')) continue;
+      rawDataUrls.push(await readFileAsDataUrl(file));
+    }
+
+    await importImageDataUrls(rawDataUrls);
+  }
+
+  async function handleCameraCapture(dataUrl: string) {
+    setShowCameraCapture(false);
+    await importImageDataUrls([dataUrl]);
   }
 
   function handleFileDrop(e: React.DragEvent) {
@@ -1952,6 +1975,14 @@ export function ReferenceBoardCanvasPage() {
               }}
             />
           </label>
+          <button
+            className="refboard-toolbar-btn"
+            onClick={() => setShowCameraCapture(true)}
+            title="Capture image from camera"
+            aria-label="Capture image from camera"
+          >
+            <Camera size={16} />
+          </button>
           <button className="refboard-toolbar-btn" onClick={handleAddText} title="Add text layer">
             <Type size={16} />
           </button>
@@ -2138,6 +2169,37 @@ export function ReferenceBoardCanvasPage() {
           onApply={(nextMaskDataUrl) => void handleApplyDrawnMask(nextMaskDataUrl)}
           onCancel={handleCancelMaskDraw}
         />
+      )}
+
+      {showCameraCapture && (
+        <div className="refboard-camera-backdrop" role="presentation" onClick={() => setShowCameraCapture(false)}>
+          <div
+            className="refboard-camera-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Camera capture"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="refboard-camera-dialog-head">
+              <p className="refboard-panel-eyebrow" style={{ marginBottom: 0 }}>Camera Capture</p>
+              <button type="button" onClick={() => setShowCameraCapture(false)} aria-label="Close camera capture">Close</button>
+            </div>
+            <CameraSourcePanel
+              facingMode={cameraFacingMode}
+              onFacingModeChange={setCameraFacingMode}
+              showUpload={false}
+              showCaptureButton
+              captureButtonLabel="Capture photo"
+              controlsClassName="poster-controls refboard-camera-controls"
+              sourcePanelClassName="refboard-camera-source"
+              sourceFrameClassName="refboard-camera-frame"
+              sourceClassName="poster-source"
+              onCapture={(dataUrl) => {
+                void handleCameraCapture(dataUrl);
+              }}
+            />
+          </div>
+        </div>
       )}
 
       {/* Context menu */}

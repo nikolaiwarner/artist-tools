@@ -13,6 +13,7 @@
 - Tool state is persisted in browser local storage when appropriate.
 - **Reference Board** additionally uses IndexedDB (via the `idb` package) for storing images and canvas layers.
 - **Reference Board** saves the latest project thumbnail immediately when leaving a canvas back to the projects list.
+- **Reference Board** can capture still images directly from the device camera inside the canvas toolbar.
 - The app is intended for GitHub Pages deployment.
 - Routing uses a hash router so tool pages work on static hosting.
 - The shared UI theme is intentionally barebones and compact to maximize visible tool workspace.
@@ -28,6 +29,7 @@
 - `src/components/AppShellContext.tsx`: shared app-shell state and actions for the navigation drawer
 - `src/components/AppMenuButton.tsx`: reusable menu trigger for top-level page heroes
 - `src/components/SendToReferenceBoardDialog.tsx`: reusable project select/create dialog for sending generated images into Reference Board
+- `src/components/CameraSourcePanel.tsx`: reusable camera source panel (start/stop, switch lens, pause, upload/capture) shared by Camera Tonal Study and Reference Board
 - `src/pages/HomePage.tsx`: landing page and tool directory
 - `src/sync/syncTypes.ts`: sync payload and settings TypeScript types
 - `src/sync/syncData.ts`: granular entry collection/apply logic for localStorage + IndexedDB; also exports legacy `collectSnapshot`/`restoreSnapshot` for testing
@@ -46,6 +48,7 @@
 - `src/tools/posterize-viewer/posterize.ts`: grayscale and posterization transformation logic
 - `src/tools/posterize-viewer/PosterizeViewerPage.tsx`: camera/image tonal study interface
 - Camera Tonal Study can send the current study frame directly into a Reference Board project as a new image layer.
+- Camera Tonal Study and Reference Board camera capture share the same camera source component for consistent behavior.
 - `src/tools/posterize-viewer/*.test.ts*`: posterization utility and page behavior tests
 - `src/tools/art-pricing/README.md`: **canonical feature spec** for Art Pricing Calculator
 - `src/tools/art-pricing/artPricing.ts`: price calculation and reverse-calculation logic

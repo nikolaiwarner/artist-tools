@@ -98,6 +98,7 @@ The visible canvas preserves the aspect ratio of the source:
 | File | Role |
 |---|---|
 | `posterize.ts` | Pure pixel transformation logic; no React dependencies |
+| `src/components/CameraSourcePanel.tsx` | Shared camera source panel (camera start/stop, switch, pause, upload, capture) reused across tools |
 | `PosterizeViewerPage.tsx` | Camera/image orchestration, render loop, UI controls |
 | `posterize.test.ts` | Unit tests for transformation functions |
 | `PosterizeViewerPage.test.tsx` | Render and interaction tests |

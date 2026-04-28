@@ -1,14 +1,13 @@
-import { type ChangeEvent, type SyntheticEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, CameraOff, Download, ImagePlus, Layers3, Palette, Pause, Play, RefreshCcw, Send } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, Layers3, Palette, Send } from 'lucide-react';
 
 import { AppMenuButton } from '../../components/AppMenuButton';
+import { CameraSourcePanel, type CameraFacingMode, type CameraSourceState } from '../../components/CameraSourcePanel';
 import { SendToReferenceBoardDialog } from '../../components/SendToReferenceBoardDialog';
 import { useSyncedLocalStorage } from '../../sync/useSyncedLocalStorage';
 import { useSendToReferenceBoardDialog } from '../../hooks/useSendToReferenceBoardDialog';
 import { applyPosterStageToImageData, buildPosterStages, type PosterRenderMode, type PosterStage } from './posterize';
 
-type CameraStatus = 'camera-off' | 'camera-active' | 'image-mode' | 'camera-error';
-type CameraFacingMode = 'environment' | 'user';
 type PosterizeViewerSettings = {
   cameraFacingMode: CameraFacingMode;
   activeStageIndex: number;
@@ -20,7 +19,6 @@ type PosterToast = {
   message: string;
 };
 
-const DEFAULT_SOURCE_ASPECT_RATIO = '3 / 4';
 const STORAGE_KEY = 'artist-tools.posterize-viewer.settings';
 const DEFAULT_SETTINGS: PosterizeViewerSettings = {
   cameraFacingMode: 'environment',
@@ -51,11 +49,12 @@ export function PosterizeViewerPage() {
     DEFAULT_SETTINGS,
     parseSettings
   );
-  const [cameraStatus, setCameraStatus] = useState<CameraStatus>('camera-off');
-  const [cameraPaused, setCameraPaused] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [sourceAspectRatio, setSourceAspectRatio] = useState(DEFAULT_SOURCE_ASPECT_RATIO);
+  const [sourceState, setSourceState] = useState<CameraSourceState>({
+    cameraStatus: 'camera-off',
+    cameraPaused: false,
+    errorMessage: null,
+    sourceAspectRatio: '3 / 4',
+  });
   const [toast, setToast] = useState<PosterToast | null>(null);
 
   const { state: sendState, handlers: sendHandlers } = useSendToReferenceBoardDialog();
@@ -64,7 +63,6 @@ export function PosterizeViewerPage() {
   const imageRef = useRef<HTMLImageElement | null>(null);
   const sourceCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const stageCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
   const activeStage = stages[settings.activeStageIndex] ?? stages[0];
@@ -72,15 +70,11 @@ export function PosterizeViewerPage() {
   useEffect(() => {
     return () => {
       cancelAnimationLoop(animationFrameRef.current);
-      stopStream(streamRef.current);
-      if (imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-      }
     };
-  }, [imageUrl]);
+  }, []);
 
   useEffect(() => {
-    if (cameraStatus !== 'camera-active' || cameraPaused) {
+    if (sourceState.cameraStatus !== 'camera-active' || sourceState.cameraPaused) {
       cancelAnimationLoop(animationFrameRef.current);
       animationFrameRef.current = null;
       return;
@@ -97,7 +91,7 @@ export function PosterizeViewerPage() {
       cancelAnimationLoop(animationFrameRef.current);
       animationFrameRef.current = null;
     };
-  }, [cameraStatus, cameraPaused, activeStage, settings.renderMode]);
+  }, [sourceState.cameraStatus, sourceState.cameraPaused, activeStage, settings.renderMode]);
 
   useEffect(() => {
     if (sendState.sendError) {
@@ -125,150 +119,15 @@ export function PosterizeViewerPage() {
   }, [toast]);
 
   useEffect(() => {
-    if (cameraStatus === 'camera-active' && cameraPaused) {
+    if (sourceState.cameraStatus === 'camera-active' && sourceState.cameraPaused) {
       renderFrameFromVideo(videoRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
       return;
     }
 
-    if (cameraStatus === 'image-mode') {
+    if (sourceState.cameraStatus === 'image-mode') {
       renderFrameFromImage(imageRef.current, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
     }
-  }, [cameraStatus, cameraPaused, activeStage, settings.renderMode]);
-
-  async function handleStartCamera(nextFacingMode = settings.cameraFacingMode) {
-    const mediaDevices = navigator.mediaDevices;
-
-    if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
-      setErrorMessage('Camera API is not available in this browser context.');
-      setCameraStatus('camera-error');
-      return;
-    }
-
-    try {
-      cancelAnimationLoop(animationFrameRef.current);
-      stopStream(streamRef.current);
-      streamRef.current = null;
-
-      const stream = await mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: nextFacingMode }
-        }
-      });
-      streamRef.current = stream;
-
-      const video = videoRef.current;
-      if (video) {
-        const streamTarget = video as HTMLVideoElement & { srcObject: MediaStream | null };
-        streamTarget.srcObject = stream;
-        void playVideo(video);
-      }
-
-      if (imageUrl) {
-        URL.revokeObjectURL(imageUrl);
-        setImageUrl(null);
-      }
-
-      setSettings((current) => ({ ...current, cameraFacingMode: nextFacingMode }));
-      setCameraPaused(false);
-      setErrorMessage(null);
-      setCameraStatus('camera-active');
-    } catch {
-      setErrorMessage('Unable to access camera. Check browser permission settings.');
-      setCameraStatus('camera-error');
-    }
-  }
-
-  function handleStopCamera() {
-    cancelAnimationLoop(animationFrameRef.current);
-    animationFrameRef.current = null;
-    stopStream(streamRef.current);
-    streamRef.current = null;
-
-    const video = videoRef.current;
-    if (video) {
-      const streamTarget = video as HTMLVideoElement & { srcObject: MediaStream | null };
-      streamTarget.srcObject = null;
-    }
-
-    setCameraPaused(false);
-    setSourceAspectRatio(DEFAULT_SOURCE_ASPECT_RATIO);
-    setCameraStatus('camera-off');
-  }
-
-  function handleImageUpload(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    handleStopCamera();
-
-    if (imageUrl) {
-      URL.revokeObjectURL(imageUrl);
-    }
-
-    const nextImageUrl = URL.createObjectURL(file);
-    setImageUrl(nextImageUrl);
-    setSourceAspectRatio(DEFAULT_SOURCE_ASPECT_RATIO);
-    setErrorMessage(null);
-    setCameraStatus('image-mode');
-  }
-
-  function handleImageLoad(event: SyntheticEvent<HTMLImageElement>) {
-    const image = event.currentTarget;
-    setSourceAspectRatio(buildAspectRatioValue(image.naturalWidth, image.naturalHeight));
-    renderFrameFromImage(image, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
-  }
-
-  function handleVideoMetadata(event: SyntheticEvent<HTMLVideoElement>) {
-    const video = event.currentTarget;
-    setSourceAspectRatio(buildAspectRatioValue(video.videoWidth, video.videoHeight));
-    video.setAttribute('width', String(video.videoWidth));
-    video.setAttribute('height', String(video.videoHeight));
-    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
-  }
-
-  async function handleCameraToggle() {
-    if (cameraStatus === 'camera-active') {
-      handleStopCamera();
-      return;
-    }
-
-    await handleStartCamera();
-  }
-
-  async function handleSwitchCamera() {
-    const nextFacingMode = settings.cameraFacingMode === 'environment' ? 'user' : 'environment';
-    setSettings((current) => ({ ...current, cameraFacingMode: nextFacingMode }));
-
-    if (cameraStatus !== 'camera-active') {
-      return;
-    }
-
-    await handleStartCamera(nextFacingMode);
-  }
-
-  async function handlePauseToggle() {
-    if (cameraStatus !== 'camera-active') {
-      return;
-    }
-
-    const video = videoRef.current;
-    if (!video) {
-      return;
-    }
-
-    if (cameraPaused) {
-      void playVideo(video);
-      setCameraPaused(false);
-      return;
-    }
-
-    renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
-    video.pause();
-    setCameraPaused(true);
-  }
+  }, [sourceState.cameraStatus, sourceState.cameraPaused, activeStage, settings.renderMode]);
 
   function handleStageToggle() {
     setSettings((current) => ({
@@ -315,54 +174,21 @@ export function PosterizeViewerPage() {
       <div className="poster-tool-grid">
         <section className="builder-panel poster-source-workbench">
           <h2>Source</h2>
-          <div className="poster-controls">
-            <button
-              type="button"
-              className={`icon-button${cameraStatus === 'camera-active' ? ' icon-button-active' : ''}`}
-              aria-label="Toggle camera"
-              aria-pressed={cameraStatus === 'camera-active'}
-              title="Toggle camera"
-              onClick={handleCameraToggle}
-            >
-              {cameraStatus === 'camera-active' ? (
-                <CameraOff size={18} strokeWidth={2} aria-hidden="true" />
-              ) : (
-                <Camera size={18} strokeWidth={2} aria-hidden="true" />
-              )}
-            </button>
-
-            <button
-              type="button"
-              className="icon-button"
-              aria-label="Switch front or back camera"
-              title={`Switch to ${settings.cameraFacingMode === 'environment' ? 'front' : 'back'} camera`}
-              onClick={() => {
-                void handleSwitchCamera();
-              }}
-            >
-              <RefreshCcw size={18} strokeWidth={2} aria-hidden="true" />
-            </button>
-
-            <button
-              type="button"
-              className={`icon-button${cameraPaused ? ' icon-button-active' : ''}`}
-              aria-label={cameraPaused ? 'Resume live camera' : 'Pause current frame'}
-              aria-pressed={cameraPaused}
-              title={cameraPaused ? 'Resume live camera' : 'Pause current frame'}
-              disabled={cameraStatus !== 'camera-active'}
-              onClick={() => {
-                void handlePauseToggle();
-              }}
-            >
-              {cameraPaused ? <Play size={18} strokeWidth={2} aria-hidden="true" /> : <Pause size={18} strokeWidth={2} aria-hidden="true" />}
-            </button>
-
-            <label className="poster-file-input">
-              <span className="sr-only">Upload source image</span>
-              <ImagePlus size={18} strokeWidth={2} aria-hidden="true" />
-              <input type="file" accept="image/*" aria-label="Upload source image" onChange={handleImageUpload} />
-            </label>
-
+          <CameraSourcePanel
+            facingMode={settings.cameraFacingMode}
+            onFacingModeChange={(nextFacingMode) => {
+              setSettings((current) => ({ ...current, cameraFacingMode: nextFacingMode }));
+            }}
+            onStateChange={setSourceState}
+            onVideoMetadata={(video) => {
+              renderFrameFromVideo(video, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
+            }}
+            onImageLoad={(image) => {
+              renderFrameFromImage(image, sourceCanvasRef.current, stageCanvasRef.current, activeStage, settings.renderMode);
+            }}
+            videoRef={videoRef}
+            imageRef={imageRef}
+          >
             <button type="button" className="icon-button" aria-label="Next value stage" title="Next value stage" onClick={handleStageToggle}>
               <Layers3 size={18} strokeWidth={2} aria-hidden="true" />
             </button>
@@ -392,7 +218,7 @@ export function PosterizeViewerPage() {
             >
               <Send size={18} strokeWidth={2} aria-hidden="true" />
             </button>
-          </div>
+          </CameraSourcePanel>
 
           <div className="poster-toast-stack" aria-live="polite" aria-atomic="true">
             {toast ? (
@@ -404,9 +230,6 @@ export function PosterizeViewerPage() {
               </p>
             ) : null}
           </div>
-
-          {errorMessage ? <p className="poster-error">{errorMessage}</p> : null}
-
           {sendState.showDialog && (
             <SendToReferenceBoardDialog
               projects={sendState.dialogProjects}
@@ -421,23 +244,6 @@ export function PosterizeViewerPage() {
               canConfirm={Boolean(sendState.selectedProjectId || sendState.newProjectName.trim())}
             />
           )}
-
-          <div className="poster-source-panel">
-            <div className="poster-source-frame" style={{ aspectRatio: sourceAspectRatio }}>
-              {imageUrl ? (
-                <img ref={imageRef} src={imageUrl} alt="Uploaded source" className="poster-source poster-source-image" onLoad={handleImageLoad} />
-              ) : (
-                <video
-                  ref={videoRef}
-                  className="poster-source poster-source-video"
-                  muted
-                  autoPlay
-                  playsInline
-                  onLoadedMetadata={handleVideoMetadata}
-                />
-              )}
-            </div>
-          </div>
 
           <canvas ref={sourceCanvasRef} className="poster-hidden-canvas" aria-hidden="true" />
         </section>
@@ -551,38 +357,4 @@ function cancelAnimationLoop(frameId: number | null) {
   }
 
   window.cancelAnimationFrame(frameId);
-}
-
-function buildAspectRatioValue(width: number, height: number) {
-  if (!width || !height) {
-    return DEFAULT_SOURCE_ASPECT_RATIO;
-  }
-
-  return `${width} / ${height}`;
-}
-
-function playVideo(video: HTMLVideoElement) {
-  try {
-    const playResult = video.play();
-    if (playResult && typeof playResult.catch === 'function') {
-      return playResult.catch(() => {
-        // Ignore autoplay errors; user can still interact to resume playback.
-      });
-    }
-
-    return playResult;
-  } catch {
-    // Ignore missing play implementations in tests or constrained environments.
-    return undefined;
-  }
-}
-
-function stopStream(stream: MediaStream | null) {
-  if (!stream) {
-    return;
-  }
-
-  for (const track of stream.getTracks()) {
-    track.stop();
-  }
 }
