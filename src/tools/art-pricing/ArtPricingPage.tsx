@@ -43,10 +43,13 @@ export function ArtPricingPage() {
   const reverseSettings = {
     hourlyRate: formState.hourlyRate,
     areaRate: formState.areaRate,
+    areaExponent: formState.areaExponent,
     timeWeight: formState.timeWeight,
     complexity: formState.complexity,
     materials: formState.materials,
-    galleryCommission: formState.galleryCommission
+    overheadFixed: formState.overheadFixed,
+    galleryCommission: formState.galleryCommission,
+    commissionMode: formState.commissionMode
   };
 
   const reverseResult =
@@ -106,6 +109,8 @@ export function ArtPricingPage() {
                 placeholder="e.g. 2"
                 onChange={handleNumberChange}
               />
+              <small className="pricing-input-help">Your studio labor time.</small>
+              <small className="pricing-input-default">Default: 2 hrs</small>
             </label>
 
             <label>
@@ -119,6 +124,8 @@ export function ArtPricingPage() {
                 placeholder="e.g. 10"
                 onChange={handleNumberChange}
               />
+              <small className="pricing-input-help">Finished artwork width.</small>
+              <small className="pricing-input-default">Default: 0 in</small>
             </label>
 
             <label>
@@ -132,6 +139,8 @@ export function ArtPricingPage() {
                 placeholder="e.g. 10"
                 onChange={handleNumberChange}
               />
+              <small className="pricing-input-help">Finished artwork height.</small>
+              <small className="pricing-input-default">Default: 0 in</small>
             </label>
 
             <label>
@@ -144,6 +153,8 @@ export function ArtPricingPage() {
                 value={formState.complexity}
                 onChange={handleNumberChange}
               />
+              <small className="pricing-input-help">Boost price for harder pieces.</small>
+              <small className="pricing-input-default">Default: 1.0</small>
             </label>
 
             <label>
@@ -157,6 +168,8 @@ export function ArtPricingPage() {
                 placeholder="0"
                 onChange={handleNumberChange}
               />
+              <small className="pricing-input-help">Cost of paint, canvas, and supplies.</small>
+              <small className="pricing-input-default">Default: $0</small>
             </label>
           </fieldset>
 
@@ -181,20 +194,42 @@ export function ArtPricingPage() {
                   min="0"
                   step="1"
                   value={formState.hourlyRate}
+                  placeholder="45"
                   onChange={handleNumberChange}
                 />
+                <small className="pricing-input-help">Your target pay per studio hour.</small>
+                <small className="pricing-input-default">Default: 45</small>
               </label>
 
               <label>
-                <span>Area rate ($ per √in²)</span>
+                <span>Area rate ($ per size unit)</span>
                 <input
                   name="areaRate"
                   type="number"
                   min="0"
                   step="0.5"
                   value={formState.areaRate}
+                  placeholder="4"
                   onChange={handleNumberChange}
                 />
+                <small className="pricing-input-help">Base size price factor.</small>
+                <small className="pricing-input-default">Default: 4</small>
+              </label>
+
+              <label>
+                <span>Size exponent (0.5 = softer, 1.0 = stronger)</span>
+                <input
+                  name="areaExponent"
+                  type="number"
+                  min="0.5"
+                  max="1"
+                  step="0.05"
+                  value={formState.areaExponent}
+                  placeholder="0.75"
+                  onChange={handleNumberChange}
+                />
+                <small className="pricing-input-help">How strongly bigger work scales price.</small>
+                <small className="pricing-input-default">Default: 0.75</small>
               </label>
 
               <label>
@@ -206,8 +241,11 @@ export function ArtPricingPage() {
                   max="1"
                   step="0.05"
                   value={formState.timeWeight}
+                  placeholder="0.6"
                   onChange={handleNumberChange}
                 />
+                <small className="pricing-input-help">Balance labor vs size influence.</small>
+                <small className="pricing-input-default">Default: 0.6</small>
               </label>
 
               <label>
@@ -218,8 +256,26 @@ export function ArtPricingPage() {
                   min="0"
                   step="1"
                   value={formState.minPrice}
+                  placeholder="150"
                   onChange={handleNumberChange}
                 />
+                <small className="pricing-input-help">Hard floor the final price cannot go below.</small>
+                <small className="pricing-input-default">Default: 150</small>
+              </label>
+
+              <label>
+                <span>Fixed overhead ($)</span>
+                <input
+                  name="overheadFixed"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formState.overheadFixed || ''}
+                  placeholder="20"
+                  onChange={handleNumberChange}
+                />
+                <small className="pricing-input-help">Flat admin/business cost per piece.</small>
+                <small className="pricing-input-default">Default: 20</small>
               </label>
 
               <label>
@@ -231,9 +287,31 @@ export function ArtPricingPage() {
                   max="100"
                   step="0.5"
                   value={formState.galleryCommission || ''}
-                  placeholder="0"
+                  placeholder="50"
                   onChange={handleNumberChange}
                 />
+                <small className="pricing-input-help">Gallery share percentage.</small>
+                <small className="pricing-input-default">Default: 50%</small>
+              </label>
+
+              <label>
+                <span>Commission handling</span>
+                <select
+                  className="pricing-select"
+                  name="commissionMode"
+                  value={formState.commissionMode}
+                  onChange={(event) =>
+                    setFormState((current) => ({
+                      ...current,
+                      commissionMode: event.target.value === 'included' ? 'included' : 'add-on'
+                    }))
+                  }
+                >
+                  <option value="add-on">Add on top (buyer pays)</option>
+                  <option value="included">Included in list price (artist absorbs)</option>
+                </select>
+                <small className="pricing-input-help">Whether gallery cut is added or absorbed.</small>
+                <small className="pricing-input-default">Default: Included in list price</small>
               </label>
             </fieldset>
           )}
@@ -265,6 +343,8 @@ export function ArtPricingPage() {
                   placeholder="e.g. 300"
                   onChange={handleReverseNumberChange}
                 />
+                <small className="pricing-input-help">The selling price you want to hit.</small>
+                <small className="pricing-input-default">Default: $0</small>
               </label>
 
               <label>
@@ -277,6 +357,8 @@ export function ArtPricingPage() {
                   value={reverseInput.estimatedTime}
                   onChange={handleReverseNumberChange}
                 />
+                <small className="pricing-input-help">Expected labor for that future piece.</small>
+                <small className="pricing-input-default">Default: 2 hrs</small>
               </label>
 
               <label>
@@ -292,6 +374,8 @@ export function ArtPricingPage() {
                     </option>
                   ))}
                 </select>
+                <small className="pricing-input-help">Shape of the canvas (width to height).</small>
+                <small className="pricing-input-default">Default: 1:1</small>
               </label>
             </fieldset>
           )}
@@ -333,14 +417,28 @@ export function ArtPricingPage() {
                         <td>${formState.materials.toFixed(2)}</td>
                       </tr>
                     )}
+                    {formState.overheadFixed > 0 && (
+                      <tr>
+                        <td>Fixed overhead</td>
+                        <td>${formState.overheadFixed.toFixed(2)}</td>
+                      </tr>
+                    )}
                     <tr className="pricing-row-total">
                       <td>Raw price</td>
                       <td>${result.rawPrice.toFixed(2)}</td>
                     </tr>
                     {formState.galleryCommission > 0 && (
                       <tr>
-                        <td>Gallery commission ({formState.galleryCommission}%)</td>
-                        <td>+${result.galleryAmount.toFixed(2)}</td>
+                        <td>
+                          Gallery commission ({formState.galleryCommission}%)
+                          {formState.commissionMode === 'included'
+                            ? ' (included in list price)'
+                            : ''}
+                        </td>
+                        <td>
+                          {formState.commissionMode === 'add-on' ? '+' : ''}
+                          ${result.galleryAmount.toFixed(2)}
+                        </td>
                       </tr>
                     )}
                   </tbody>
@@ -359,16 +457,39 @@ export function ArtPricingPage() {
                   <summary>View formula</summary>
                   <pre className="pricing-formula-code">
                     {`time cost  = ${formState.time} hrs × $${formState.hourlyRate}/hr
-area cost  = √(${formState.width}×${formState.height}) × $${formState.areaRate}
+area cost  = (${formState.width}×${formState.height})^${formState.areaExponent} × $${formState.areaRate}
 blended    = (${result.timeCost} × ${formState.timeWeight}) + (${result.areaCost} × ${(1 - formState.timeWeight).toFixed(2)})
-raw price  = (${result.blendedCost} × ${formState.complexity}) + ${formState.materials}`}
+raw price  = (${result.blendedCost} × ${formState.complexity}) + ${formState.materials} + ${formState.overheadFixed}`}
                   </pre>
                 </details>
               </div>
+
             </>
           ) : (
             <p className="pricing-placeholder">Enter time and dimensions to see a price estimate.</p>
           )}
+
+          <div className="pricing-breakdown">
+            <h2>How this tool works</h2>
+            <p>
+              Simple idea: price should reflect your labor, size, and out-of-pocket costs, while
+              still staying consistent from one piece to the next.
+            </p>
+            <p>
+              First, it calculates a labor number from your hours and hourly rate. Then it
+              calculates a size number from width and height. The size exponent lets you choose how
+              strongly bigger pieces should increase price.
+            </p>
+            <p>
+              Next, it blends labor and size using the time-vs-size weight, applies complexity, and
+              adds materials plus fixed overhead. If you use galleries, commission can either be
+              added on top or treated as included in the listed price.
+            </p>
+            <p>
+              Finally, the minimum price floor protects you from accidentally pricing very low just
+              because a piece is small or fast to make.
+            </p>
+          </div>
 
           {reverseResult && (
             <div className="pricing-reverse-result">

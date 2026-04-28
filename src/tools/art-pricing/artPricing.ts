@@ -6,9 +6,12 @@ export type ArtPricingInput = {
   materials: number;
   hourlyRate: number;
   areaRate: number;
+  areaExponent: number;
   timeWeight: number;
+  overheadFixed: number;
   minPrice: number;
   galleryCommission: number;
+  commissionMode: 'add-on' | 'included';
 };
 
 export type ArtPricingResult = {
@@ -36,7 +39,15 @@ export type ReverseResult = {
 
 export type ReverseSettings = Pick<
   ArtPricingInput,
-  'hourlyRate' | 'areaRate' | 'timeWeight' | 'complexity' | 'materials' | 'galleryCommission'
+  | 'hourlyRate'
+  | 'areaRate'
+  | 'areaExponent'
+  | 'timeWeight'
+  | 'complexity'
+  | 'materials'
+  | 'overheadFixed'
+  | 'galleryCommission'
+  | 'commissionMode'
 >;
 
 export const defaultArtPricingInput: ArtPricingInput = {
@@ -45,11 +56,14 @@ export const defaultArtPricingInput: ArtPricingInput = {
   height: 0,
   complexity: 1,
   materials: 0,
-  hourlyRate: 75,
-  areaRate: 6,
-  timeWeight: 0.5,
-  minPrice: 100,
-  galleryCommission: 0
+  hourlyRate: 45,
+  areaRate: 4,
+  areaExponent: 0.75,
+  timeWeight: 0.6,
+  overheadFixed: 20,
+  minPrice: 150,
+  galleryCommission: 50,
+  commissionMode: 'included'
 };
 
 export function calculatePrice(input: ArtPricingInput): ArtPricingResult {
@@ -60,16 +74,23 @@ export function calculatePrice(input: ArtPricingInput): ArtPricingResult {
   const materials = sanitize(input.materials);
   const hourlyRate = sanitize(input.hourlyRate);
   const areaRate = sanitize(input.areaRate);
+  const areaExponent = clamp(sanitize(input.areaExponent), 0.5, 1);
   const timeWeight = clamp(sanitize(input.timeWeight), 0, 1);
+  const overheadFixed = sanitize(input.overheadFixed);
   const minPrice = sanitize(input.minPrice);
   const galleryCommission = clamp(sanitize(input.galleryCommission), 0, 100);
+  const commissionMode = input.commissionMode === 'included' ? 'included' : 'add-on';
 
   const timeCost = roundToTwo(time * hourlyRate);
-  const areaCost = roundToTwo(Math.sqrt(width * height) * areaRate);
+  const area = width * height;
+  const areaCost = roundToTwo(Math.pow(area, areaExponent) * areaRate);
   const blendedCost = roundToTwo(timeCost * timeWeight + areaCost * (1 - timeWeight));
-  const rawPrice = roundToTwo(blendedCost * complexity + materials);
+  const rawPrice = roundToTwo(blendedCost * complexity + materials + overheadFixed);
   const galleryAmount = roundToTwo(rawPrice * galleryCommission / 100);
-  const priceWithCommission = roundToTwo(rawPrice + galleryAmount);
+  const priceWithCommission =
+    commissionMode === 'add-on'
+      ? roundToTwo(rawPrice + galleryAmount)
+      : rawPrice;
   const finalPrice = roundToTwo(Math.max(priceWithCommission, minPrice));
 
   return { timeCost, areaCost, blendedCost, rawPrice, galleryAmount, finalPrice };
@@ -82,28 +103,40 @@ export function calculateReversePrice(
   const targetPrice = sanitize(input.targetPrice);
   const estimatedTime = sanitize(input.estimatedTime);
   const aspectRatio = Math.max(0.001, sanitize(input.aspectRatio));
-  const { hourlyRate, areaRate, timeWeight, complexity, materials, galleryCommission } = settings;
+  const {
+    hourlyRate,
+    areaRate,
+    areaExponent,
+    timeWeight,
+    complexity,
+    materials,
+    overheadFixed,
+    galleryCommission,
+    commissionMode
+  } = settings;
 
   if (targetPrice <= 0) {
     return { width: 0, height: 0, area: 0, verifiedPrice: 0 };
   }
 
-  // Adjust target for commission: we want (rawPrice + rawPrice × commission/100) = target
-  // => rawPrice = target / (1 + commission/100)
+  // In add-on mode, final includes commission. In included mode, final equals raw.
   const adjustedTarget =
-    galleryCommission > 0
+    commissionMode === 'add-on' && galleryCommission > 0
       ? targetPrice / (1 + galleryCommission / 100)
       : targetPrice;
 
-  // rawPrice = (blendedCost × complexity) + materials
-  // => blendedCost = (adjustedTarget - materials) / complexity
-  const targetBlended = complexity > 0 ? (adjustedTarget - materials) / complexity : 0;
+  // rawPrice = (blendedCost × complexity) + materials + overheadFixed
+  // => blendedCost = (adjustedTarget - materials - overheadFixed) / complexity
+  const targetBlended =
+    complexity > 0
+      ? (adjustedTarget - materials - overheadFixed) / complexity
+      : 0;
 
   // blendedCost = timeCost × timeWeight + areaCost × (1 - timeWeight)
   // timeCost (weighted portion) = estimatedTime × hourlyRate × timeWeight
   const weightedTimeCost = estimatedTime * hourlyRate * timeWeight;
 
-  // areaCost (weighted portion) = √(width×height) × areaRate × (1 - timeWeight)
+  // areaCost (weighted portion) = (area^areaExponent) × areaRate × (1 - timeWeight)
   // => targetWeightedAreaCost = targetBlended - weightedTimeCost
   const targetWeightedAreaCost = targetBlended - weightedTimeCost;
 
@@ -112,17 +145,17 @@ export function calculateReversePrice(
     return { width: 0, height: 0, area: 0, verifiedPrice: 0 };
   }
 
-  // targetWeightedAreaCost = √area × areaRate × (1 - timeWeight)
-  // => √area = targetWeightedAreaCost / (areaRate × (1 - timeWeight))
+  // targetWeightedAreaCost = (area^areaExponent) × areaRate × (1 - timeWeight)
+  // => area^areaExponent = targetWeightedAreaCost / (areaRate × (1 - timeWeight))
   const areaWeight = 1 - timeWeight;
-  if (areaWeight === 0) {
+  if (areaWeight === 0 || areaRate <= 0 || areaExponent <= 0) {
     return { width: 0, height: 0, area: 0, verifiedPrice: 0 };
   }
 
-  const sqrtArea = targetWeightedAreaCost / (areaRate * areaWeight);
-  // area = sqrtArea²; width/height = aspectRatio => area = width × (width / aspectRatio)
+  const scaledArea = targetWeightedAreaCost / (areaRate * areaWeight);
+  const area = Math.pow(scaledArea, 1 / areaExponent);
+  // width/height = aspectRatio => area = width × (width / aspectRatio)
   // => width² = area × aspectRatio
-  const area = sqrtArea * sqrtArea;
   const width = roundToTwo(Math.sqrt(area * aspectRatio));
   const height = roundToTwo(width / aspectRatio);
 
@@ -133,11 +166,14 @@ export function calculateReversePrice(
     height,
     complexity,
     materials,
+    areaExponent,
     hourlyRate,
     areaRate,
     timeWeight,
+    overheadFixed,
     minPrice: 0,
-    galleryCommission
+    galleryCommission,
+    commissionMode
   });
 
   return {

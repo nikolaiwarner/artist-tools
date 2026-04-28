@@ -50,6 +50,10 @@
 - `src/tools/art-pricing/README.md`: **canonical feature spec** for Art Pricing Calculator
 - `src/tools/art-pricing/artPricing.ts`: price calculation and reverse-calculation logic
 - `src/tools/art-pricing/ArtPricingPage.tsx`: art pricing interface
+- Art Pricing Calculator supports tunable area exponent scaling, fixed overhead, and two gallery commission handling modes (`add-on` and `included`).
+- Art Pricing Calculator includes a plain-language “How this tool works” explanation section in the results panel.
+- Art Pricing Calculator ships with tuned realistic default advanced settings (hourly, area rate/exponent, weight, overhead, floor, commission mode/rate) and mirrors these values in advanced-field placeholders.
+- Art Pricing Calculator shows concise per-input `Default:` hints in-context across artwork, advanced, and reverse inputs.
 - `src/tools/art-pricing/*.test.ts*`: pricing logic and page behavior tests
 - `src/tools/reference-board/README.md`: **canonical feature spec** for Reference Board
 - `src/tools/reference-board/types.ts`: shared TypeScript types (ProjectMeta, ImageLayer, TextLayer, CanvasLayer, Viewport)
@@ -60,6 +64,7 @@
 - `src/tools/reference-board/sendToReferenceBoard.ts`: reusable integration helpers to resolve/create destination projects and append canvas images as new image layers
 - `src/tools/reference-board/ReferenceBoardPage.tsx`: projects list interface
 - `src/tools/reference-board/ReferenceBoardCanvasPage.tsx`: canvas editor (react-konva stage, image/text layers, transforms)
+- Reference Board layer copy/paste uses the system clipboard and supports cross-project pastes with image/mask asset ID remapping for per-project uniqueness
 - `src/tools/reference-board/components/CanvasStage.tsx`: Konva Stage with pan/zoom + zoom controls
 - `src/tools/reference-board/components/ContextMenu.tsx`: right-click layer actions menu
 - `src/tools/reference-board/components/LayerPanel.tsx`: selected layer properties sidebar

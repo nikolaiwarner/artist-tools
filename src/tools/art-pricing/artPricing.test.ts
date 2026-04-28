@@ -16,9 +16,12 @@ describe('calculatePrice', () => {
       materials: 0,
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
+      overheadFixed: 0,
       minPrice: 100,
-      galleryCommission: 0
+      galleryCommission: 0,
+      commissionMode: 'add-on'
     });
 
     // timeCost = 2 × 75 = 150
@@ -43,9 +46,12 @@ describe('calculatePrice', () => {
       materials: 0,
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
+      overheadFixed: 0,
       minPrice: 100,
-      galleryCommission: 0
+      galleryCommission: 0,
+      commissionMode: 'add-on'
     });
 
     // timeCost = 0.1 × 75 = 7.5
@@ -65,9 +71,12 @@ describe('calculatePrice', () => {
       materials: 0,
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
+      overheadFixed: 0,
       minPrice: 0,
-      galleryCommission: 50
+      galleryCommission: 50,
+      commissionMode: 'add-on'
     });
 
     // rawPrice = 105 (from basic test above)
@@ -87,9 +96,12 @@ describe('calculatePrice', () => {
       materials: 0,
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
+      overheadFixed: 0,
       minPrice: 0,
-      galleryCommission: 0
+      galleryCommission: 0,
+      commissionMode: 'add-on'
     });
     const complex = calculatePrice({
       time: 2,
@@ -99,9 +111,12 @@ describe('calculatePrice', () => {
       materials: 0,
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
+      overheadFixed: 0,
       minPrice: 0,
-      galleryCommission: 0
+      galleryCommission: 0,
+      commissionMode: 'add-on'
     });
 
     expect(complex.rawPrice).toBeCloseTo(base.blendedCost * 2);
@@ -116,9 +131,12 @@ describe('calculatePrice', () => {
       materials: 25,
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
+      overheadFixed: 0,
       minPrice: 0,
-      galleryCommission: 0
+      galleryCommission: 0,
+      commissionMode: 'add-on'
     });
 
     // blendedCost = 105, rawPrice = (105 × 2) + 25 = 235
@@ -137,12 +155,95 @@ describe('calculatePrice', () => {
     expect(result.finalPrice).toBeGreaterThanOrEqual(0);
   });
 
+  it('supports tunable area exponent so larger pieces can scale faster', () => {
+    const conservative = calculatePrice({
+      time: 0,
+      width: 24,
+      height: 36,
+      complexity: 1,
+      materials: 0,
+      hourlyRate: 0,
+      areaRate: 1,
+      areaExponent: 0.5,
+      timeWeight: 0,
+      overheadFixed: 0,
+      minPrice: 0,
+      galleryCommission: 0,
+      commissionMode: 'add-on'
+    });
+
+    const strongerSizeScaling = calculatePrice({
+      time: 0,
+      width: 24,
+      height: 36,
+      complexity: 1,
+      materials: 0,
+      hourlyRate: 0,
+      areaRate: 1,
+      areaExponent: 1,
+      timeWeight: 0,
+      overheadFixed: 0,
+      minPrice: 0,
+      galleryCommission: 0,
+      commissionMode: 'add-on'
+    });
+
+    expect(strongerSizeScaling.areaCost).toBeGreaterThan(conservative.areaCost);
+  });
+
+  it('adds a fixed overhead after complexity and materials', () => {
+    const result = calculatePrice({
+      time: 2,
+      width: 10,
+      height: 10,
+      complexity: 2,
+      materials: 25,
+      hourlyRate: 75,
+      areaRate: 6,
+      areaExponent: 0.5,
+      timeWeight: 0.5,
+      overheadFixed: 30,
+      minPrice: 0,
+      galleryCommission: 0,
+      commissionMode: 'add-on'
+    });
+
+    // blendedCost = 105, rawPrice = (105 × 2) + 25 + 30 = 265
+    expect(result.rawPrice).toBeCloseTo(265);
+  });
+
+  it('supports commission absorbed by artist mode', () => {
+    const result = calculatePrice({
+      time: 2,
+      width: 10,
+      height: 10,
+      complexity: 1,
+      materials: 0,
+      hourlyRate: 75,
+      areaRate: 6,
+      areaExponent: 0.5,
+      timeWeight: 0.5,
+      overheadFixed: 0,
+      minPrice: 0,
+      galleryCommission: 50,
+      commissionMode: 'included'
+    });
+
+    // rawPrice = 105, final price should stay at 105 in included mode
+    expect(result.rawPrice).toBeCloseTo(105);
+    expect(result.galleryAmount).toBeCloseTo(52.5);
+    expect(result.finalPrice).toBeCloseTo(105);
+  });
+
   it('has sensible defaults', () => {
-    expect(defaultArtPricingInput.hourlyRate).toBe(75);
-    expect(defaultArtPricingInput.areaRate).toBe(6);
-    expect(defaultArtPricingInput.timeWeight).toBe(0.5);
-    expect(defaultArtPricingInput.minPrice).toBe(100);
-    expect(defaultArtPricingInput.galleryCommission).toBe(0);
+    expect(defaultArtPricingInput.hourlyRate).toBe(45);
+    expect(defaultArtPricingInput.areaRate).toBe(4);
+    expect(defaultArtPricingInput.areaExponent).toBe(0.75);
+    expect(defaultArtPricingInput.timeWeight).toBe(0.6);
+    expect(defaultArtPricingInput.overheadFixed).toBe(20);
+    expect(defaultArtPricingInput.minPrice).toBe(150);
+    expect(defaultArtPricingInput.galleryCommission).toBe(50);
+    expect(defaultArtPricingInput.commissionMode).toBe('included');
   });
 });
 
@@ -151,11 +252,14 @@ describe('calculateReversePrice', () => {
     const settings = {
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
       complexity: 1,
       materials: 0,
-      galleryCommission: 0
-    };
+      overheadFixed: 0,
+      galleryCommission: 0,
+      commissionMode: 'add-on'
+    } as const;
     const result = calculateReversePrice(
       { targetPrice: 200, estimatedTime: 2, aspectRatio: 1 },
       settings
@@ -172,11 +276,14 @@ describe('calculateReversePrice', () => {
     const settings = {
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
       complexity: 1,
       materials: 0,
-      galleryCommission: 50
-    };
+      overheadFixed: 0,
+      galleryCommission: 50,
+      commissionMode: 'add-on'
+    } as const;
     const result = calculateReversePrice(
       { targetPrice: 300, estimatedTime: 2, aspectRatio: 1 },
       settings
@@ -190,11 +297,14 @@ describe('calculateReversePrice', () => {
     const settings = {
       hourlyRate: 75,
       areaRate: 6,
+      areaExponent: 0.5,
       timeWeight: 0.5,
       complexity: 1,
       materials: 0,
-      galleryCommission: 0
-    };
+      overheadFixed: 0,
+      galleryCommission: 0,
+      commissionMode: 'add-on'
+    } as const;
     // Target price lower than time cost alone
     const result = calculateReversePrice(
       { targetPrice: 10, estimatedTime: 10, aspectRatio: 1 },

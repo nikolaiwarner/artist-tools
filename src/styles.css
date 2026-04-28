@@ -917,6 +917,21 @@ p {
   font-style: italic;
 }
 
+.pricing-input-default {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: var(--ink-soft);
+  opacity: 0.82;
+}
+
+.pricing-input-help {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
 .pricing-select {
   width: 100%;
   padding: 7px 8px;

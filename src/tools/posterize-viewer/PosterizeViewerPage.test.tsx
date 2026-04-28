@@ -366,6 +366,6 @@ describe('PosterizeViewerPage', () => {
     await user.click(screen.getByRole('button', { name: /send to reference board/i }));
     await user.click(screen.getByRole('button', { name: /send image/i }));
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/unable to send image to reference board/i);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/unable to send image to reference board/i);
   });
 });

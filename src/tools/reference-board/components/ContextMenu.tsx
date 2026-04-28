@@ -4,12 +4,14 @@ interface ContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
-  onBringToFront: () => void;
-  onSendToBack: () => void;
-  onBringForward: () => void;
-  onSendBackward: () => void;
+  onDelete?: () => void;
+  onDuplicate?: () => void;
+  onCopy?: () => void;
+  onPaste?: () => void;
+  onBringToFront?: () => void;
+  onSendToBack?: () => void;
+  onBringForward?: () => void;
+  onSendBackward?: () => void;
   onCropStart?: () => void;
   cropLabel?: string;
 }
@@ -20,6 +22,8 @@ export function ContextMenu({
   onClose,
   onDelete,
   onDuplicate,
+  onCopy,
+  onPaste,
   onBringToFront,
   onSendToBack,
   onBringForward,
@@ -69,15 +73,23 @@ export function ContextMenu({
       role="menu"
       aria-label="Layer actions"
     >
-      {item('Duplicate', onDuplicate)}
+      {onCopy && item('Copy', onCopy)}
+      {onDuplicate && item('Duplicate', onDuplicate)}
+      {onPaste && item('Paste', onPaste)}
       {onCropStart && item(cropLabel, onCropStart)}
-      <div className="refboard-ctx-divider" />
-      {item('Bring to Front', onBringToFront)}
-      {item('Bring Forward', onBringForward)}
-      {item('Send Backward', onSendBackward)}
-      {item('Send to Back', onSendToBack)}
-      <div className="refboard-ctx-divider" />
-      {item('Delete', onDelete)}
+      {(onCopy || onDuplicate || onPaste || onCropStart) && (onBringToFront || onSendToBack || onBringForward || onSendBackward || onDelete) && (
+        <div className="refboard-ctx-divider" />
+      )}
+      {onBringToFront && item('Bring to Front', onBringToFront)}
+      {onBringForward && item('Bring Forward', onBringForward)}
+      {onSendBackward && item('Send Backward', onSendBackward)}
+      {onSendToBack && item('Send to Back', onSendToBack)}
+      {onDelete && (
+        <>
+          <div className="refboard-ctx-divider" />
+          {item('Delete', onDelete)}
+        </>
+      )}
     </div>
   );
 }

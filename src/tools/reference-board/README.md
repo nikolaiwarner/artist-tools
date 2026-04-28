@@ -27,6 +27,8 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - Drag and drop images from your file system directly onto the canvas
 - **Paste Behavior** (Ctrl/Cmd+V):
   - If you've copied a layer via Ctrl/Cmd+C and the clipboard contains no new images, **V** pastes the copied layer with positional offset
+  - Layer copy uses the system clipboard, so you can copy in one Reference Board project and paste into another
+  - When pasting image layers from a different project, image and mask assets are duplicated with new IDs so asset identities remain unique between projects
   - If the clipboard contains an image (whether or not you previously copied a layer), **V** pastes the image as a new layer and clears any previously copied layers
   - This ensures the most recent action (copying an external image) takes precedence
 - Delete/Backspace removes the selected layer
@@ -85,7 +87,8 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 ### Layer Ordering
 - **Desktop**: Right-click (or long press on touch) opens context menu: Bring to Front, Bring Forward, Send Backward, Send to Back
 - **Mobile**: Long-press (hold 500ms) on a layer to open context menu with the same layer ordering options
-- Context menu also provides Delete and Duplicate
+- Context menu also provides Copy, Delete, and Duplicate
+- Right-clicking empty canvas space shows a Paste option (when layers have been copied)
 - Layer panel provides duplicate (copy icon) and delete (trash icon) buttons
 
 ### Mobile-First Experience

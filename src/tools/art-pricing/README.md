@@ -20,11 +20,14 @@ Estimates an artwork's selling price from time, dimensions, and materials. Also 
 
 | Field | Description | Default |
 |---|---|---|
-| Hourly rate ($/hr) | Your studio labor rate | 75 |
-| Area rate ($ per √in²) | Rate applied to the square root of the artwork area | 6 |
-| Time vs area weight | 0 = price driven entirely by area; 1 = price driven entirely by time | 0.5 |
-| Minimum price ($) | Price floor — final price is never lower than this | 100 |
-| Gallery commission (%) | Added on top of the raw price to cover gallery take | 0 |
+| Hourly rate ($/hr) | Your studio labor rate | 45 |
+| Area rate ($ per size unit) | Rate applied to area after exponent scaling | 4 |
+| Size exponent | Controls how strongly size affects price. 0.5 = softer growth, 1.0 = direct area growth | 0.75 |
+| Time vs area weight | 0 = price driven entirely by area; 1 = price driven entirely by time | 0.6 |
+| Fixed overhead ($) | Flat per-piece business overhead added after blend and complexity | 20 |
+| Minimum price ($) | Price floor — final price is never lower than this | 150 |
+| Gallery commission (%) | Commission rate used for channel math | 50 |
+| Commission handling | `Add on top` (buyer pays) or `Included` (artist absorbs) | Included |
 
 ---
 
@@ -34,14 +37,18 @@ Estimates an artwork's selling price from time, dimensions, and materials. Also 
 
 ```
 time cost   = time × hourly_rate
-area cost   = √(width × height) × area_rate
+area cost   = (width × height)^area_exponent × area_rate
 blended     = time_cost × time_weight + area_cost × (1 − time_weight)
-raw price   = (blended × complexity) + materials
+raw price   = (blended × complexity) + materials + overhead_fixed
 gallery amt = raw_price × commission / 100
-final price = max(raw_price + gallery_amt, min_price)
+list price  = raw_price + gallery_amt      # add-on mode
+list price  = raw_price                    # included mode
+final price = max(list_price, min_price)
 ```
 
 The blending weight lets you balance time-based and size-based pricing. At 0.5 both contribute equally. At 1.0 only time is used (useful for very fast, large work). At 0.0 only area is used (useful for very labor-light prints or reproductions).
+
+The area exponent controls how aggressively large canvases scale. At 0.5, size grows more gently (legacy square-root style). At 1.0, size scales directly with area.
 
 The minimum price floor is applied last, after commission. It guarantees the artist never undersells even for trivially small works.
 
@@ -50,12 +57,12 @@ The minimum price floor is applied last, after commission. It guarantees the art
 Given a target selling price, estimated hours, and an aspect ratio, the reverse calculator solves for the canvas dimensions that would produce that price using the same formula.
 
 ```
-adjusted_target     = target / (1 + commission / 100)    # undo commission
-target_blended      = (adjusted_target − materials) / complexity
+adjusted_target     = target / (1 + commission / 100)    # only in add-on mode
+target_blended      = (adjusted_target − materials − overhead_fixed) / complexity
 weighted_time_cost  = estimated_time × hourly_rate × time_weight
 target_area_cost    = target_blended − weighted_time_cost
-sqrt_area           = target_area_cost / (area_rate × (1 − time_weight))
-area                = sqrt_area²
+scaled_area         = target_area_cost / (area_rate × (1 − time_weight))
+area                = scaled_area^(1 / area_exponent)
 width               = √(area × aspect_ratio)
 height              = width / aspect_ratio
 ```
@@ -79,6 +86,20 @@ The reverse calculator always verifies by running the forward formula on the res
 ## State persistence
 
 Form state (all basic and advanced inputs) is persisted to `localStorage` under the key `artist-tools.art-pricing`. The advanced panel collapsed state and reverse calculator collapsed state are not persisted — they reset to closed on page load.
+
+## How This Tool Works (UI section)
+
+The results panel includes a plain-language “How this tool works” section that explains the pricing logic in simple terms:
+
+1. Start from labor (time × rate).
+2. Add a size signal (area with exponent scaling).
+3. Blend labor and size.
+4. Apply complexity.
+5. Add materials and fixed overhead.
+6. Handle commission by selected mode.
+7. Apply minimum price floor.
+
+The input panels also show short in-context `Default:` hints under each field so users can understand baseline values without opening external docs.
 
 ---
 

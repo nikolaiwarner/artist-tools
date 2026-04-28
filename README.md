@@ -117,7 +117,15 @@ Current output includes:
 
 ### Art Pricing Calculator
 
-Art Pricing Calculator helps artists estimate a selling price based on time, canvas dimensions, materials, and complexity. Includes a reverse calculator that finds canvas dimensions for a target price.
+Art Pricing Calculator helps artists estimate a selling price based on time, canvas dimensions, materials, complexity, and channel strategy. It includes:
+
+- tunable size scaling via an area exponent (0.5 to 1.0)
+- fixed per-piece overhead support
+- gallery commission handling modes (`add on top` vs `included in listed price`)
+- reverse calculator that finds canvas dimensions for a target price using the same advanced settings
+- a plain-language “How this tool works” explainer in the results panel
+- calibrated realistic defaults for labor/size/channel assumptions, mirrored as advanced-field placeholders
+- concise in-context `Default:` hints displayed under each Art Pricing input
 
 ### Reference Board
 
@@ -137,6 +145,8 @@ Key features:
 - Text layers with font, size, bold/italic, color, and alignment controls
 - Box layers for composition guides with resizable rectangle bounds plus stroke/fill controls
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
+- Ctrl/Cmd+C and Ctrl/Cmd+V layer copy/paste uses the system clipboard, including cross-project paste
+- Cross-project pastes duplicate image/mask assets with new IDs so asset identities stay unique between projects
 - Images and mask assets stored in IndexedDB; project metadata stored in localStorage
 
 ### Sync

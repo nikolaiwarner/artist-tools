@@ -45,6 +45,7 @@ import { SYNC_APPLIED_EVENT, type SyncAppliedDetail } from '../../sync/syncData'
 
 const DEFAULT_CANVAS_BACKGROUND_COLOR = '#1f1f1f';
 const PROJECTS_STORAGE_KEY = 'artist-tools.reference-board.projects';
+const LAYER_CLIPBOARD_KIND = 'artist-tools/reference-board-layers';
 
 // ── History management ───────────────────────────────────────────────────────
 
@@ -104,6 +105,48 @@ function newId(): string {
 
 function nextZIndex(layers: CanvasLayer[]): number {
   return layers.length === 0 ? 1 : Math.max(...layers.map((l) => l.zIndex)) + 1;
+}
+
+interface LayerClipboardPayload {
+  kind: typeof LAYER_CLIPBOARD_KIND;
+  sourceProjectId: string;
+  copiedAt: number;
+  layers: CanvasLayer[];
+}
+
+function cloneLayerForClipboard(layer: CanvasLayer): CanvasLayer {
+  if (layer.type === 'image') {
+    return {
+      ...layer,
+      crop: layer.crop ? { ...layer.crop } : undefined,
+    } as ImageLayer;
+  }
+
+  if (layer.type === 'shape') {
+    return { ...layer } as ShapeLayer;
+  }
+
+  return { ...layer } as TextLayer;
+}
+
+function parseLayerClipboardPayload(rawText: string): LayerClipboardPayload | null {
+  if (!rawText) return null;
+
+  try {
+    const parsed = JSON.parse(rawText) as Partial<LayerClipboardPayload>;
+    if (parsed.kind !== LAYER_CLIPBOARD_KIND) return null;
+    if (typeof parsed.sourceProjectId !== 'string') return null;
+    if (!Array.isArray(parsed.layers)) return null;
+
+    return {
+      kind: LAYER_CLIPBOARD_KIND,
+      sourceProjectId: parsed.sourceProjectId,
+      copiedAt: typeof parsed.copiedAt === 'number' ? parsed.copiedAt : Date.now(),
+      layers: parsed.layers as CanvasLayer[],
+    };
+  } catch {
+    return null;
+  }
 }
 
 export interface SelectionBox {
@@ -789,6 +832,7 @@ export function ReferenceBoardCanvasPage() {
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; layerId: string; layerType: string } | null>(null);
+  const [canvasContextMenu, setCanvasContextMenu] = useState<{ x: number; y: number } | null>(null);
   const [imageCache, setImageCache] = useState<Map<string, string>>(new Map());
   const [cropLayerId, setCropLayerId] = useState<string | null>(null);
   const [cropState, setCropState] = useState<CropRect | null>(null);
@@ -1062,6 +1106,8 @@ export function ReferenceBoardCanvasPage() {
   );
 
   const handleCopyLayers = useCallback(() => {
+    if (!projectId) return false;
+
     const selectedIds = multiSelectedIds.size > 0
       ? Array.from(multiSelectedIds)
       : selectedId
@@ -1073,51 +1119,91 @@ export function ReferenceBoardCanvasPage() {
     const copied = layers
       .filter((layer) => selectedIds.includes(layer.id))
       .sort((a, b) => a.zIndex - b.zIndex)
-      .map((layer) => {
-        if (layer.type === 'image') {
-          return {
-            ...layer,
-            crop: layer.crop ? { ...layer.crop } : undefined,
-          } as ImageLayer;
-        }
-        if (layer.type === 'shape') {
-          return { ...layer } as ShapeLayer;
-        }
-        return { ...layer } as TextLayer;
-      });
+      .map(cloneLayerForClipboard);
 
     if (copied.length === 0) return false;
     copiedLayersRef.current = copied;
+
+    const payload: LayerClipboardPayload = {
+      kind: LAYER_CLIPBOARD_KIND,
+      sourceProjectId: projectId,
+      copiedAt: Date.now(),
+      layers: copied,
+    };
+
+    const clipboard = globalThis.navigator?.clipboard;
+    if (clipboard && typeof clipboard.writeText === 'function') {
+      void clipboard.writeText(JSON.stringify(payload)).catch(() => undefined);
+    }
+
     return true;
-  }, [layers, multiSelectedIds, selectedId]);
+  }, [layers, multiSelectedIds, projectId, selectedId]);
 
-  const handlePasteLayers = useCallback(() => {
-    if (!projectId || copiedLayersRef.current.length === 0) return false;
+  const handlePasteLayers = useCallback(async (clipboardLayers: CanvasLayer[], sourceProjectId?: string) => {
+    if (!projectId || clipboardLayers.length === 0) return false;
 
-    const copied = copiedLayersRef.current;
+    let copied = clipboardLayers.map(cloneLayerForClipboard);
+    const isCrossProjectPaste = !!sourceProjectId && sourceProjectId !== projectId;
+
+    if (isCrossProjectPaste) {
+      const imageAssetIdMap = new Map<string, string>();
+      const nextCache = new Map(imageCache);
+
+      const copyImageAsset = async (sourceAssetId: string): Promise<string> => {
+        const mappedAssetId = imageAssetIdMap.get(sourceAssetId);
+        if (mappedAssetId) return mappedAssetId;
+
+        const dataUrl = nextCache.get(sourceAssetId) ?? await loadImage(sourceAssetId);
+        if (!dataUrl) {
+          return sourceAssetId;
+        }
+
+        const pastedAssetId = newId();
+        imageAssetIdMap.set(sourceAssetId, pastedAssetId);
+        nextCache.set(pastedAssetId, dataUrl);
+        await saveImage(pastedAssetId, dataUrl);
+        return pastedAssetId;
+      };
+
+      copied = await Promise.all(copied.map(async (layer) => {
+        if (layer.type !== 'image') return layer;
+
+        const pastedImageId = await copyImageAsset(layer.imageId);
+        const pastedMaskImageId = layer.maskImageId
+          ? await copyImageAsset(layer.maskImageId)
+          : undefined;
+
+        return {
+          ...layer,
+          imageId: pastedImageId,
+          ...(pastedMaskImageId ? { maskImageId: pastedMaskImageId } : {}),
+        } as ImageLayer;
+      }));
+
+      setImageCache(nextCache);
+    }
+
     saveToHistory();
 
-    let pastedIds: string[] = [];
-    setLayers((prev) => {
-      let zIndex = nextZIndex(prev);
-      const pasted = copied.map((layer) => {
-        const id = newId();
-        pastedIds.push(id);
-        const newLayer: CanvasLayer = {
-          ...layer,
-          id,
-          projectId,
-          x: layer.x + 20,
-          y: layer.y + 20,
-          zIndex: zIndex++,
-        };
-        void saveLayer(newLayer);
-        return newLayer;
-      });
-
-      scheduleThumbnail();
-      return [...prev, ...pasted];
+    let zIndex = nextZIndex(layers);
+    const pastedIds: string[] = [];
+    const pasted = copied.map((layer) => {
+      const id = newId();
+      pastedIds.push(id);
+      const newLayer: CanvasLayer = {
+        ...layer,
+        id,
+        projectId,
+        x: layer.x + 20,
+        y: layer.y + 20,
+        zIndex: zIndex++,
+      };
+      void saveLayer(newLayer);
+      return newLayer;
     });
+
+    scheduleThumbnail();
+    setLayers((prev) => [...prev, ...pasted]);
 
     if (pastedIds.length === 1) {
       setSelectedId(pastedIds[0]);
@@ -1128,7 +1214,7 @@ export function ReferenceBoardCanvasPage() {
     }
 
     return pastedIds.length > 0;
-  }, [projectId, saveToHistory, scheduleThumbnail]);
+  }, [imageCache, layers, projectId, saveToHistory, scheduleThumbnail]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1174,52 +1260,44 @@ export function ReferenceBoardCanvasPage() {
       const active = document.activeElement;
       if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement || active instanceof HTMLSelectElement) return;
 
-      // If no clipboard data but we have copied layers, paste them
-      if (copiedLayersRef.current.length > 0) {
-        const items = e.clipboardData?.items;
-        // If clipboard also has images, prefer them (user copied something new)
-        const imageFiles: File[] = [];
-        if (items && items.length > 0) {
-          for (const item of Array.from(items)) {
-            if (!item.type.startsWith('image/')) continue;
-            const file = item.getAsFile();
-            if (file) imageFiles.push(file);
-          }
+      const items = e.clipboardData?.items;
+      const imageFiles: File[] = [];
+      if (items && items.length > 0) {
+        for (const item of Array.from(items)) {
+          if (!item.type.startsWith('image/')) continue;
+          const file = item.getAsFile();
+          if (file) imageFiles.push(file);
         }
+      }
 
-        if (imageFiles.length > 0) {
-          // Clipboard has new images, clear copied layers and import images
-          copiedLayersRef.current = [];
-          e.preventDefault();
-          void importFiles(imageFiles);
-        } else {
-          // No images on clipboard, paste the copied layers
-          e.preventDefault();
-          handlePasteLayers();
-        }
+      // Pasted image files should always take precedence over layer payloads.
+      if (imageFiles.length > 0) {
+        copiedLayersRef.current = [];
+        e.preventDefault();
+        void importFiles(imageFiles);
         return;
       }
 
-      // No copied layers, check for clipboard images
-      const items = e.clipboardData?.items;
-      if (!items || items.length === 0) return;
+      const clipboardText = e.clipboardData?.getData('text/plain') ?? '';
+      const clipboardPayload = parseLayerClipboardPayload(clipboardText);
 
-      const imageFiles: File[] = [];
-      for (const item of Array.from(items)) {
-        if (!item.type.startsWith('image/')) continue;
-        const file = item.getAsFile();
-        if (file) imageFiles.push(file);
+      if (clipboardPayload && clipboardPayload.layers.length > 0) {
+        copiedLayersRef.current = clipboardPayload.layers.map(cloneLayerForClipboard);
+        e.preventDefault();
+        void handlePasteLayers(clipboardPayload.layers, clipboardPayload.sourceProjectId);
+        return;
       }
 
-      if (imageFiles.length === 0) return;
-
-      e.preventDefault();
-      void importFiles(imageFiles);
+      // Fallback for environments where clipboard text is unavailable.
+      if (copiedLayersRef.current.length > 0) {
+        e.preventDefault();
+        void handlePasteLayers(copiedLayersRef.current, projectId);
+      }
     };
 
     window.addEventListener('paste', onPaste);
     return () => window.removeEventListener('paste', onPaste);
-  }, [editingTextId, importFiles, handlePasteLayers]);
+  }, [editingTextId, handlePasteLayers, importFiles, projectId]);
 
   useEffect(() => {
     if (selectedId || cropLayerId) return;
@@ -1669,9 +1747,18 @@ export function ReferenceBoardCanvasPage() {
 
   function handleContextMenu(e: Konva.KonvaEventObject<MouseEvent>, layerId: string) {
     e.evt.preventDefault();
+    e.evt.stopPropagation();
+    setCanvasContextMenu(null);
     setSelectedId(layerId);
     const layer = layers.find((l) => l.id === layerId);
     setContextMenu({ x: e.evt.clientX, y: e.evt.clientY, layerId, layerType: layer?.type ?? 'image' });
+  }
+
+  function handleCanvasContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    if (copiedLayersRef.current.length === 0) return;
+    setContextMenu(null);
+    setCanvasContextMenu({ x: e.clientX, y: e.clientY });
   }
 
   // ── Box select handlers ────────────────────────────────────────────────────
@@ -1881,11 +1968,13 @@ export function ReferenceBoardCanvasPage() {
         {/* Canvas */}
         <div
           className="refboard-canvas-wrap"
+          data-testid="canvas-wrap"
           style={{
             backgroundColor: canvasBackgroundColor,
             backgroundSize: `${40 * viewport.scale}px ${40 * viewport.scale}px`,
             backgroundPosition: `${viewport.x}px ${viewport.y}px`,
           }}
+          onContextMenu={handleCanvasContextMenu}
         >
           {loading && <div className="refboard-loading">Loading…</div>}
           <CanvasStage
@@ -2052,11 +2141,37 @@ export function ReferenceBoardCanvasPage() {
       )}
 
       {/* Context menu */}
+      {canvasContextMenu && (
+        <ContextMenu
+          x={canvasContextMenu.x}
+          y={canvasContextMenu.y}
+          onClose={() => setCanvasContextMenu(null)}
+          onPaste={() => void handlePasteLayers(copiedLayersRef.current, copiedLayersRef.current[0]?.projectId)}
+        />
+      )}
+
       {contextMenu && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
           onClose={() => setContextMenu(null)}
+          onCopy={() => {
+            const layerToCopy = layers.find((l) => l.id === contextMenu.layerId);
+            if (layerToCopy && projectId) {
+              const copied = [cloneLayerForClipboard(layerToCopy)];
+              copiedLayersRef.current = copied;
+              const payload: LayerClipboardPayload = {
+                kind: LAYER_CLIPBOARD_KIND,
+                sourceProjectId: projectId,
+                copiedAt: Date.now(),
+                layers: copied,
+              };
+              const clipboard = globalThis.navigator?.clipboard;
+              if (clipboard && typeof clipboard.writeText === 'function') {
+                void clipboard.writeText(JSON.stringify(payload)).catch(() => undefined);
+              }
+            }
+          }}
           onDelete={() => handleDeleteLayer(contextMenu.layerId)}
           onDuplicate={() => handleDuplicateLayer(contextMenu.layerId)}
           onBringToFront={() => handleLayerOrder(contextMenu.layerId, 'front')}

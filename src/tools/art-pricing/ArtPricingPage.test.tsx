@@ -38,8 +38,8 @@ describe('ArtPricingPage', () => {
     await user.clear(screen.getByLabelText(/height/i));
     await user.type(screen.getByLabelText(/height/i), '10');
 
-    // timeCost=150, areaCost=60, blended=105, finalPrice=max(105,100)=105
-    expect(screen.getAllByText(/\$105/).length).toBeGreaterThan(0);
+    // Tuned defaults include overhead and a higher floor; this scenario settles at the floor.
+    expect(screen.getAllByText(/\$150\.00/).length).toBeGreaterThan(0);
   });
 
   it('shows the advanced section only after toggle', async () => {
@@ -54,6 +54,58 @@ describe('ArtPricingPage', () => {
     expect(screen.getByLabelText(/hourly rate/i)).toBeInTheDocument();
   });
 
+  it('shows realistic default placeholders in advanced inputs', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /advanced/i }));
+
+    expect(screen.getByLabelText(/hourly rate/i)).toHaveAttribute('placeholder', '45');
+    expect(screen.getByLabelText(/area rate/i)).toHaveAttribute('placeholder', '4');
+    expect(screen.getByLabelText(/size exponent/i)).toHaveAttribute('placeholder', '0.75');
+    expect(screen.getByLabelText(/time vs area weight/i)).toHaveAttribute('placeholder', '0.6');
+    expect(screen.getByLabelText(/fixed overhead/i)).toHaveAttribute('placeholder', '20');
+    expect(screen.getByLabelText(/minimum price/i)).toHaveAttribute('placeholder', '150');
+    expect(screen.getByLabelText(/gallery commission/i)).toHaveAttribute('placeholder', '50');
+  });
+
+  it('shows succinct in-context default info for inputs', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect(screen.getByText('Default: 2 hrs')).toBeInTheDocument();
+    expect(screen.getByText('Default: 1.0')).toBeInTheDocument();
+    expect(screen.getByText('Default: $0')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /advanced/i }));
+    expect(screen.getByText('Default: 45')).toBeInTheDocument();
+    expect(screen.getByText('Default: 0.75')).toBeInTheDocument();
+    expect(screen.getByText('Default: Included in list price')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /reverse/i }));
+    expect(screen.getByText('Default: 1:1')).toBeInTheDocument();
+  });
+
+  it('shows a short explanation for each section fields', async () => {
+    const user = userEvent.setup();
+
+    renderPage();
+
+    expect(screen.getByText('Your studio labor time.')).toBeInTheDocument();
+    expect(screen.getByText('Cost of paint, canvas, and supplies.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /advanced/i }));
+    expect(screen.getByText('Your target pay per studio hour.')).toBeInTheDocument();
+    expect(screen.getByText('How strongly bigger work scales price.')).toBeInTheDocument();
+    expect(screen.getByText('Whether gallery cut is added or absorbed.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /reverse/i }));
+    expect(screen.getByText('The selling price you want to hit.')).toBeInTheDocument();
+    expect(screen.getByText('Shape of the canvas (width to height).')).toBeInTheDocument();
+  });
+
   it('shows the reverse calculator only after toggle', async () => {
     const user = userEvent.setup();
 
@@ -64,5 +116,12 @@ describe('ArtPricingPage', () => {
     await user.click(screen.getByRole('button', { name: /reverse/i }));
 
     expect(screen.getByLabelText(/target price/i)).toBeInTheDocument();
+  });
+
+  it('shows an easy-to-understand explanation section', () => {
+    renderPage();
+
+    expect(screen.getByText(/how this tool works/i)).toBeInTheDocument();
+    expect(screen.getByText(/simple idea:/i)).toBeInTheDocument();
   });
 });

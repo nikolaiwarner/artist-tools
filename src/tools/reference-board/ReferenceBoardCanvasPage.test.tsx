@@ -36,7 +36,7 @@ const canvasStageMocks = vi.hoisted(() => {
       if (attrs.width !== undefined) this._width = attrs.width;
       if (attrs.height !== undefined) this._height = attrs.height;
     },
-    batchDraw() {},
+    batchDraw() { },
     toCanvas() {
       return document.createElement('canvas');
     },
@@ -80,8 +80,18 @@ vi.mock('react-konva', () => ({
     <div data-testid="konva-stage" onClick={onClick} onDoubleClick={onDblClick}>{children}</div>
   ),
   Layer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  Image: ({ onClick }: { onClick?: (e: { evt: { shiftKey: boolean } }) => void }) => (
-    <div data-testid="konva-image" onClick={(e) => { e.stopPropagation(); onClick?.({ evt: { shiftKey: !!e.shiftKey } }); }} />
+  Image: ({ onClick, onContextMenu }: {
+    onClick?: (e: { evt: { shiftKey: boolean } }) => void;
+    onContextMenu?: (e: { evt: { clientX: number; clientY: number; preventDefault: () => void; stopPropagation: () => void } }) => void;
+  }) => (
+    <div
+      data-testid="konva-image"
+      onClick={(e) => { e.stopPropagation(); onClick?.({ evt: { shiftKey: !!e.shiftKey } }); }}
+      onContextMenu={(e) => {
+        e.stopPropagation();
+        onContextMenu?.({ evt: { clientX: e.clientX, clientY: e.clientY, preventDefault: () => { }, stopPropagation: () => { } } });
+      }}
+    />
   ),
   Text: ({ onClick, onDblClick }: { onClick?: (e: { evt: { shiftKey: boolean } }) => void; onDblClick?: () => void }) => (
     <div
@@ -149,6 +159,12 @@ const makeStorage = () => {
 beforeEach(() => {
   vi.clearAllMocks();
   canvasStageMocks.reset();
+  const clipboardWriteText = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal('navigator', {
+    clipboard: {
+      writeText: clipboardWriteText,
+    },
+  });
   vi.stubGlobal('window', {
     localStorage: makeStorage(),
     crypto: { randomUUID: () => `test-${Math.random()}` },
@@ -905,6 +921,7 @@ describe('ReferenceBoardCanvasPage', () => {
     const pasteEvent = {
       clipboardData: {
         items: [],
+        getData: () => '',
       },
       preventDefault: preventPasteDefault,
     } as unknown as ClipboardEvent;
@@ -921,6 +938,232 @@ describe('ReferenceBoardCanvasPage', () => {
     expect(saveLayer).toHaveBeenCalled();
     expect(saveImage).not.toHaveBeenCalled();
     expect(preventCopyDefault).toHaveBeenCalled();
+  });
+
+  it('writes copied layer payload to the clipboard on Cmd/Ctrl+C', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+    vi.mocked(loadImage).mockResolvedValue('data:image/jpeg;base64,abc');
+
+    renderCanvas();
+
+    const imageNode = await screen.findByTestId('konva-image');
+    fireEvent.click(imageNode);
+
+    const addEventListenerMock = vi.mocked(window.addEventListener);
+    const keydownHandlers = addEventListenerMock.mock.calls
+      .filter((call) => call[0] === 'keydown')
+      .map((call) => call[1] as (event: KeyboardEvent) => void);
+
+    const preventCopyDefault = vi.fn();
+    const copyEvent = {
+      key: 'c',
+      ctrlKey: true,
+      metaKey: false,
+      shiftKey: false,
+      preventDefault: preventCopyDefault,
+    } as unknown as KeyboardEvent;
+
+    keydownHandlers.forEach((handler) => handler(copyEvent));
+
+    await vi.waitFor(() => {
+      expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
+    });
+
+    const clipboardPayload = vi.mocked(globalThis.navigator.clipboard.writeText).mock.calls[0][0];
+    const parsedPayload = JSON.parse(clipboardPayload) as { kind: string; sourceProjectId: string; layers: Array<{ id: string }> };
+    expect(parsedPayload.kind).toBe('artist-tools/reference-board-layers');
+    expect(parsedPayload.sourceProjectId).toBe('proj-1');
+    expect(parsedPayload.layers).toHaveLength(1);
+    expect(parsedPayload.layers[0].id).toBe('img-layer-1');
+    expect(preventCopyDefault).toHaveBeenCalled();
+  });
+
+  it('pastes layers from clipboard JSON into another project and remaps image asset ids', async () => {
+    renderCanvas('proj-2');
+
+    const addEventListenerMock = vi.mocked(window.addEventListener);
+    const pasteHandlers = addEventListenerMock.mock.calls
+      .filter((call) => call[0] === 'paste')
+      .map((call) => call[1] as (event: ClipboardEvent) => void);
+    expect(pasteHandlers.length).toBeGreaterThan(0);
+
+    vi.mocked(loadImage).mockImplementation(async (imageId: string) => {
+      if (imageId === 'img-1') return 'data:image/jpeg;base64,source-image';
+      if (imageId === 'mask-1') return 'data:image/png;base64,source-mask';
+      return undefined;
+    });
+
+    const clipboardLayerPayload = JSON.stringify({
+      kind: 'artist-tools/reference-board-layers',
+      sourceProjectId: 'proj-1',
+      layers: [
+        {
+          id: 'img-layer-1',
+          projectId: 'proj-1',
+          type: 'image',
+          imageId: 'img-1',
+          maskImageId: 'mask-1',
+          x: 100,
+          y: 120,
+          rotation: 0,
+          opacity: 1,
+          zIndex: 1,
+          width: 300,
+          height: 200,
+          scaleX: 1,
+          scaleY: 1,
+          flipX: false,
+          flipY: false,
+        },
+      ],
+    });
+
+    const preventDefault = vi.fn();
+    const pasteEvent = {
+      clipboardData: {
+        items: [],
+        getData: (type: string) => (type === 'text/plain' ? clipboardLayerPayload : ''),
+      },
+      preventDefault,
+    } as unknown as ClipboardEvent;
+
+    pasteHandlers[pasteHandlers.length - 1]?.(pasteEvent);
+
+    await vi.waitFor(() => {
+      expect(loadImage).toHaveBeenCalledWith('img-1');
+      expect(loadImage).toHaveBeenCalledWith('mask-1');
+      expect(saveImage).toHaveBeenCalledTimes(2);
+    });
+
+    const saveImageCalls = vi.mocked(saveImage).mock.calls;
+    expect(saveImageCalls[0][0]).not.toBe('img-1');
+    expect(saveImageCalls[1][0]).not.toBe('mask-1');
+
+    const pastedImageAssetId = saveImageCalls.find((call) => call[1] === 'data:image/jpeg;base64,source-image')?.[0];
+    const pastedMaskAssetId = saveImageCalls.find((call) => call[1] === 'data:image/png;base64,source-mask')?.[0];
+
+    expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'proj-2',
+      type: 'image',
+      imageId: pastedImageAssetId,
+      maskImageId: pastedMaskAssetId,
+    }));
+    expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('shows Copy option in layer context menu and writes to clipboard on click', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+
+    renderCanvas();
+    const imageNode = await screen.findByTestId('konva-image');
+    fireEvent.contextMenu(imageNode);
+
+    const copyButton = await screen.findByText('Copy');
+    expect(copyButton).toBeInTheDocument();
+
+    fireEvent.mouseDown(copyButton);
+
+    await vi.waitFor(() => {
+      expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
+    });
+
+    const clipboardText = vi.mocked(globalThis.navigator.clipboard.writeText).mock.calls[0][0];
+    const payload = JSON.parse(clipboardText) as { kind: string; layers: Array<{ id: string }> };
+    expect(payload.kind).toBe('artist-tools/reference-board-layers');
+    expect(payload.layers[0].id).toBe('img-layer-1');
+  });
+
+  it('shows Paste option in canvas context menu after copying a layer', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+
+    renderCanvas();
+    const imageNode = await screen.findByTestId('konva-image');
+
+    // Select the layer first
+    fireEvent.click(imageNode);
+
+    // Copy via keyboard shortcut
+    const addEventListenerMock = vi.mocked(window.addEventListener);
+    const keydownHandlers = addEventListenerMock.mock.calls
+      .filter((call) => call[0] === 'keydown')
+      .map((call) => call[1] as (event: KeyboardEvent) => void);
+
+    const copyEvent = {
+      key: 'c',
+      ctrlKey: false,
+      metaKey: true,
+      shiftKey: false,
+      preventDefault: vi.fn(),
+    } as unknown as KeyboardEvent;
+
+    for (const handler of keydownHandlers) {
+      handler(copyEvent);
+    }
+
+    await vi.waitFor(() => {
+      expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
+    });
+
+    // Right-click on the canvas wrap to open the paste menu
+    const canvasWrap = screen.getByTestId('canvas-wrap');
+    fireEvent.contextMenu(canvasWrap);
+
+    const pasteButton = await screen.findByText('Paste');
+    expect(pasteButton).toBeInTheDocument();
   });
 
   it('adds a pasted clipboard image as a new image layer', async () => {
@@ -979,7 +1222,7 @@ describe('ReferenceBoardCanvasPage', () => {
       preventDefault,
     } as unknown as ClipboardEvent;
 
-    pasteHandlers.forEach((handler) => handler(pasteEvent));
+    pasteHandlers[pasteHandlers.length - 1]?.(pasteEvent);
 
     await vi.waitFor(() => {
       expect(saveImage).toHaveBeenCalled();
