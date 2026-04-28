@@ -12,6 +12,7 @@
 - There is no backend.
 - Tool state is persisted in browser local storage when appropriate.
 - **Reference Board** additionally uses IndexedDB (via the `idb` package) for storing images and canvas layers.
+- **Reference Board** saves the latest project thumbnail immediately when leaving a canvas back to the projects list.
 - The app is intended for GitHub Pages deployment.
 - Routing uses a hash router so tool pages work on static hosting.
 - The shared UI theme is intentionally barebones and compact to maximize visible tool workspace.

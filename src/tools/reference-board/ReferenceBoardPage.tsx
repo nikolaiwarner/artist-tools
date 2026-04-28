@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Save, Pin, PinOff, Pencil, Trash2 } from 'lucide-react';
+import { Save, Pin, PinOff, Pencil, Trash2, MoreHorizontal, Copy } from 'lucide-react';
 import { AppMenuButton } from '../../components/AppMenuButton';
-import { listProjects, createProject, updateProject, deleteProject } from './referenceBoard';
+import { listProjects, createProject, updateProject, deleteProject, duplicateProject } from './referenceBoard';
 import type { ProjectMeta } from './types';
-import { deleteProjectData, estimateProjectStorageBytes } from './db';
+import { deleteProjectData, duplicateProjectData, estimateProjectStorageBytes } from './db';
 import { SYNC_APPLIED_EVENT } from '../../sync/syncData';
 
 function estimateProjectMetaBytes(project: ProjectMeta): number {
@@ -22,7 +22,9 @@ export function ReferenceBoardPage() {
   const [projectStorage, setProjectStorage] = useState<Record<string, number>>({});
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,6 +72,24 @@ export function ReferenceBoardPage() {
     }
   }, [renamingId]);
 
+  useEffect(() => {
+    if (!openMenuId) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    }
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpenMenuId(null);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [openMenuId]);
+
   function handleCreate() {
     const name = window.prompt('Project name:');
     if (name === null) return;
@@ -110,6 +130,16 @@ export function ReferenceBoardPage() {
 
   function handleTogglePinned(project: ProjectMeta) {
     updateProject(project.id, { pinned: !project.pinned });
+    setProjects(listProjects());
+  }
+
+  function handleDuplicate(project: ProjectMeta) {
+    setOpenMenuId(null);
+    const copy = duplicateProject(project.id);
+    if (!copy) return;
+    void duplicateProjectData(project.id, copy.id).then(() => {
+      setProjects(listProjects());
+    });
     setProjects(listProjects());
   }
 
@@ -204,22 +234,47 @@ export function ReferenceBoardPage() {
                   >
                     {project.pinned ? <PinOff size={14} aria-hidden="true" /> : <Pin size={14} aria-hidden="true" />}
                   </button>
-                  <button
-                    onClick={() => handleRenameStart(project)}
-                    aria-label={`Rename ${project.name}`}
-                    title="Rename project"
-                    className="refboard-icon-action"
-                  >
-                    <Pencil size={14} aria-hidden="true" />
-                  </button>
-                  <button
-                    className="refboard-delete-btn"
-                    onClick={() => handleDelete(project)}
-                    aria-label={`Delete ${project.name}`}
-                    title="Delete project"
-                  >
-                    <Trash2 size={14} aria-hidden="true" />
-                  </button>
+                  <div className="refboard-card-menu-wrap" ref={openMenuId === project.id ? menuRef : null}>
+                    <button
+                      className="refboard-icon-action"
+                      aria-label={`Options for ${project.name}`}
+                      title="Project options"
+                      aria-haspopup="true"
+                      aria-expanded={openMenuId === project.id}
+                      onClick={() => setOpenMenuId(openMenuId === project.id ? null : project.id)}
+                    >
+                      <MoreHorizontal size={14} aria-hidden="true" />
+                    </button>
+                    {openMenuId === project.id ? (
+                      <div className="refboard-card-menu" role="menu">
+                        <button
+                          role="menuitem"
+                          className="refboard-menu-item"
+                          onClick={() => { handleRenameStart(project); setOpenMenuId(null); }}
+                        >
+                          <Pencil size={13} aria-hidden="true" />
+                          Rename
+                        </button>
+                        <button
+                          role="menuitem"
+                          className="refboard-menu-item"
+                          onClick={() => handleDuplicate(project)}
+                          aria-label={`Duplicate ${project.name}`}
+                        >
+                          <Copy size={13} aria-hidden="true" />
+                          Duplicate
+                        </button>
+                        <button
+                          role="menuitem"
+                          className="refboard-menu-item refboard-menu-item--danger"
+                          onClick={() => { handleDelete(project); setOpenMenuId(null); }}
+                        >
+                          <Trash2 size={13} aria-hidden="true" />
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </article>

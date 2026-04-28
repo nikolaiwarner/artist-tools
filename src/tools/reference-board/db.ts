@@ -149,3 +149,44 @@ export function resetDBForTesting(): void {
     indexedDB.deleteDatabase(DB_NAME);
   }
 }
+
+export async function duplicateProjectData(sourceProjectId: string, targetProjectId: string): Promise<void> {
+  const db = await getDB();
+  const sourceLayers = await db.getAllFromIndex(LAYERS_STORE, 'by-project', sourceProjectId);
+
+  // Deep-copy each image asset so the projects are fully independent
+  const imageIdMap = new Map<string, string>();
+  const imageIdsToCopy = new Set<string>();
+  for (const layer of sourceLayers) {
+    if (layer.type === 'image') {
+      imageIdsToCopy.add(layer.imageId);
+      if (layer.maskImageId) imageIdsToCopy.add(layer.maskImageId);
+    }
+  }
+  for (const oldId of imageIdsToCopy) {
+    const dataUrl = await db.get(IMAGES_STORE, oldId);
+    if (dataUrl) {
+      const newId = crypto.randomUUID();
+      await db.put(IMAGES_STORE, dataUrl, newId);
+      imageIdMap.set(oldId, newId);
+    }
+  }
+
+  const tx = db.transaction(LAYERS_STORE, 'readwrite');
+  for (const layer of sourceLayers) {
+    if (layer.type === 'image') {
+      const copy = {
+        ...layer,
+        id: crypto.randomUUID(),
+        projectId: targetProjectId,
+        imageId: imageIdMap.get(layer.imageId) ?? layer.imageId,
+        ...(layer.maskImageId ? { maskImageId: imageIdMap.get(layer.maskImageId) ?? layer.maskImageId } : {}),
+      };
+      tx.objectStore(LAYERS_STORE).put(copy);
+    } else {
+      tx.objectStore(LAYERS_STORE).put({ ...layer, id: crypto.randomUUID(), projectId: targetProjectId });
+    }
+  }
+  await tx.done;
+  emitDBChange();
+}

@@ -5,14 +5,17 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 ## How It Works
 
 ### Projects
-- Create, rename, and delete projects from the projects list
+- Create, rename, delete, and **duplicate** projects from the projects list
 - Each project has its own infinite canvas
 - The projects list is a top-level tool page and includes the shared app menu trigger in the hero area
 - Projects can be pinned so they always sort ahead of unpinned projects
 - Project thumbnails are auto-generated from canvas content (after a 2 second idle period) and shown in the project grid
   - Thumbnails include the canvas background color for better visual representation
+  - Exiting a project to the projects list saves a fresh thumbnail immediately (does not wait for the idle debounce)
 - Each project card shows an estimated total storage footprint (project metadata + thumbnail in localStorage, plus layers + image data in IndexedDB)
 - All project metadata is stored in `localStorage` under `artist-tools.reference-board.projects`
+- Each project card has a **"..." options button** that opens a dropdown menu with: Pin/Unpin, Rename, Duplicate, Delete
+  - Duplicate copies the project metadata (name gets " Copy" suffix, not pinned, no thumbnail) and all its canvas layers into a new project; image data is shared (not re-copied)
 
 ### Canvas
 

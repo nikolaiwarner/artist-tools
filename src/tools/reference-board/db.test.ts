@@ -7,6 +7,7 @@ import {
   loadLayersForProject,
   deleteLayer,
   deleteProjectData,
+  duplicateProjectData,
   estimateProjectStorageBytes,
   exportAllDBData,
   importAllDBData,
@@ -190,5 +191,73 @@ describe('export/import snapshot helpers', () => {
     const importedLayers = await loadLayersForProject('proj-2');
     expect(importedLayers).toHaveLength(1);
     expect(importedLayers[0].id).toBe('new-layer');
+  });
+});
+
+describe('duplicateProjectData', () => {
+  it('copies all layers to the target project', async () => {
+    await saveLayer(makeImageLayer({ id: 'l1', projectId: 'src-proj' }));
+    await saveLayer(makeTextLayer({ id: 'l2', projectId: 'src-proj' }));
+
+    await duplicateProjectData('src-proj', 'dst-proj');
+
+    const copies = await loadLayersForProject('dst-proj');
+    expect(copies).toHaveLength(2);
+  });
+
+  it('assigns new unique ids to copied layers', async () => {
+    await saveLayer(makeImageLayer({ id: 'l1', projectId: 'src-proj' }));
+
+    await duplicateProjectData('src-proj', 'dst-proj');
+
+    const copies = await loadLayersForProject('dst-proj');
+    expect(copies[0].id).not.toBe('l1');
+  });
+
+  it('assigns a new imageId (deep copy) for image layers', async () => {
+    await saveImage('img-1', 'data:image/png;base64,abc');
+    await saveLayer(makeImageLayer({ id: 'l1', projectId: 'src-proj', imageId: 'img-1' }));
+
+    await duplicateProjectData('src-proj', 'dst-proj');
+
+    const copies = await loadLayersForProject('dst-proj');
+    const imgLayer = copies[0] as import('./types').ImageLayer;
+    expect(imgLayer.imageId).not.toBe('img-1');
+  });
+
+  it('copies the image data to the new imageId', async () => {
+    await saveImage('img-1', 'data:image/png;base64,abc');
+    await saveLayer(makeImageLayer({ id: 'l1', projectId: 'src-proj', imageId: 'img-1' }));
+
+    await duplicateProjectData('src-proj', 'dst-proj');
+
+    const copies = await loadLayersForProject('dst-proj');
+    const imgLayer = copies[0] as import('./types').ImageLayer;
+    const copiedData = await loadImage(imgLayer.imageId);
+    expect(copiedData).toBe('data:image/png;base64,abc');
+  });
+
+  it('keeps source image data intact after duplication', async () => {
+    await saveImage('img-1', 'data:image/png;base64,abc');
+    await saveLayer(makeImageLayer({ id: 'l1', projectId: 'src-proj', imageId: 'img-1' }));
+
+    await duplicateProjectData('src-proj', 'dst-proj');
+
+    expect(await loadImage('img-1')).toBe('data:image/png;base64,abc');
+  });
+
+  it('does not affect the source project layers', async () => {
+    await saveLayer(makeImageLayer({ id: 'l1', projectId: 'src-proj' }));
+
+    await duplicateProjectData('src-proj', 'dst-proj');
+
+    const sourceLayers = await loadLayersForProject('src-proj');
+    expect(sourceLayers).toHaveLength(1);
+  });
+
+  it('does nothing when source project has no layers', async () => {
+    await duplicateProjectData('empty-proj', 'dst-proj');
+    const copies = await loadLayersForProject('dst-proj');
+    expect(copies).toHaveLength(0);
   });
 });

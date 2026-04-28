@@ -80,6 +80,25 @@ export function deleteProject(id: string): boolean {
   return true;
 }
 
+export function duplicateProject(id: string): ProjectMeta | null {
+  const source = readProjects().find((p) => p.id === id);
+  if (!source) return null;
+  const now = Date.now();
+  const copy: ProjectMeta = {
+    id: crypto.randomUUID(),
+    name: `${source.name} Copy`,
+    createdAt: now,
+    updatedAt: now,
+    pinned: false,
+    canvasBackgroundColor: source.canvasBackgroundColor,
+    viewport: { x: 0, y: 0, scale: 1 },
+    ...(source.thumbnailDataUrl ? { thumbnailDataUrl: source.thumbnailDataUrl } : {}),
+  };
+  const projects = readProjects();
+  writeProjects([...projects, copy]);
+  return copy;
+}
+
 export function updateViewport(id: string, viewport: Viewport): void {
   updateProject(id, { viewport });
 }

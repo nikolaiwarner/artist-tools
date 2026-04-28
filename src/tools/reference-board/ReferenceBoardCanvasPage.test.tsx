@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ReferenceBoardCanvasPage } from './ReferenceBoardCanvasPage';
@@ -12,7 +12,68 @@ import {
   saveLayer,
 } from './db';
 import { generateMaskDataUrlFromImage } from './backgroundMask';
-import { updateProject } from './referenceBoard';
+import { updateProject, updateThumbnail } from './referenceBoard';
+
+const canvasStageMocks = vi.hoisted(() => {
+  const fakeStage = {
+    _x: 0,
+    _y: 0,
+    _scaleX: 1,
+    _scaleY: 1,
+    _width: 1200,
+    _height: 800,
+    x() { return this._x; },
+    y() { return this._y; },
+    scaleX() { return this._scaleX; },
+    scaleY() { return this._scaleY; },
+    width() { return this._width; },
+    height() { return this._height; },
+    setAttrs(attrs: Partial<{ x: number; y: number; scaleX: number; scaleY: number; width: number; height: number }>) {
+      if (attrs.x !== undefined) this._x = attrs.x;
+      if (attrs.y !== undefined) this._y = attrs.y;
+      if (attrs.scaleX !== undefined) this._scaleX = attrs.scaleX;
+      if (attrs.scaleY !== undefined) this._scaleY = attrs.scaleY;
+      if (attrs.width !== undefined) this._width = attrs.width;
+      if (attrs.height !== undefined) this._height = attrs.height;
+    },
+    batchDraw() {},
+    toCanvas() {
+      return document.createElement('canvas');
+    },
+  };
+
+  return {
+    attachStageRef: false,
+    fakeStage,
+    reset() {
+      this.attachStageRef = false;
+      fakeStage._x = 0;
+      fakeStage._y = 0;
+      fakeStage._scaleX = 1;
+      fakeStage._scaleY = 1;
+      fakeStage._width = 1200;
+      fakeStage._height = 800;
+    },
+  };
+});
+
+vi.mock('./components/CanvasStage', () => ({
+  CanvasStage: ({ children, stageRef, onBackgroundClick }: {
+    children?: React.ReactNode;
+    stageRef?: { current: unknown };
+    onBackgroundClick?: () => void;
+  }) => {
+    if (stageRef && canvasStageMocks.attachStageRef) {
+      stageRef.current = canvasStageMocks.fakeStage as never;
+    }
+
+    return (
+      <div data-testid="konva-stage" onClick={onBackgroundClick}>
+        {children}
+      </div>
+    );
+  },
+}));
 
 vi.mock('react-konva', () => ({
   Stage: ({ children, onClick, onDblClick }: { children: React.ReactNode; onClick?: () => void; onDblClick?: () => void }) => (
@@ -87,6 +148,7 @@ const makeStorage = () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  canvasStageMocks.reset();
   vi.stubGlobal('window', {
     localStorage: makeStorage(),
     crypto: { randomUUID: () => `test-${Math.random()}` },
@@ -97,6 +159,10 @@ beforeEach(() => {
     confirm: vi.fn().mockReturnValue(true),
     prompt: vi.fn(),
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function renderCanvas(projectId = 'proj-1') {
@@ -172,6 +238,58 @@ describe('ReferenceBoardCanvasPage', () => {
     fireEvent.change(colorInput, { target: { value: '#223344' } });
 
     expect(updateProject).toHaveBeenCalledWith('proj-1', { canvasBackgroundColor: '#223344' });
+  });
+
+  it('saves the latest thumbnail before exiting to the projects list', async () => {
+    canvasStageMocks.attachStageRef = true;
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 50,
+        y: 60,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 240,
+        height: 160,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]);
+
+    const canvasContextStub = {
+      fillStyle: '',
+      fillRect: vi.fn(),
+      drawImage: vi.fn(),
+    } as unknown as CanvasRenderingContext2D;
+    const getContextSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getContext')
+      .mockReturnValue(canvasContextStub);
+    const toDataUrlSpy = vi
+      .spyOn(HTMLCanvasElement.prototype, 'toDataURL')
+      .mockReturnValue('data:image/jpeg;base64,test-thumb');
+
+    renderCanvas();
+
+    await screen.findByTestId('konva-rect');
+
+    expect(updateThumbnail).not.toHaveBeenCalled();
+
+    const backButton = await screen.findByTitle(/back to projects/i);
+    fireEvent.click(backButton);
+
+    expect(updateThumbnail).toHaveBeenCalledTimes(1);
+    expect(updateThumbnail).toHaveBeenCalledWith('proj-1', 'data:image/jpeg;base64,test-thumb');
+    expect(await screen.findByTestId('projects-page')).toBeInTheDocument();
+
+    getContextSpy.mockRestore();
+    toDataUrlSpy.mockRestore();
   });
 
   it('duplicates image layer without writing a second image blob', async () => {

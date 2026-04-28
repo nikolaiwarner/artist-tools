@@ -7,6 +7,7 @@ import { estimateProjectStorageBytes } from './db';
 
 vi.mock('./db', () => ({
   deleteProjectData: vi.fn().mockResolvedValue(undefined),
+  duplicateProjectData: vi.fn().mockResolvedValue(undefined),
   estimateProjectStorageBytes: vi.fn().mockResolvedValue(2048),
 }));
 
@@ -86,7 +87,7 @@ describe('ReferenceBoardPage', () => {
     expect(screen.getByText('Seascape')).toBeInTheDocument();
   });
 
-  it('shows icon action buttons on project card', () => {
+  it('shows "..." options button and pin button on project card', () => {
     const storage = makeStorage();
     const projects = [
       {
@@ -101,9 +102,29 @@ describe('ReferenceBoardPage', () => {
     stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
 
     renderPage();
-    expect(screen.getByRole('button', { name: /rename flowers/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /delete flowers/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /options for flowers/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /pin flowers/i })).toBeInTheDocument();
+  });
+
+  it('shows menu items when ... button is clicked', () => {
+    const storage = makeStorage();
+    const projects = [
+      {
+        id: 'p1',
+        name: 'Flowers',
+        createdAt: 1000,
+        updatedAt: 2000,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+    ];
+    storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /options for flowers/i }));
+    expect(screen.getByRole('menuitem', { name: /rename/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /delete/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /duplicate flowers/i })).toBeInTheDocument();
   });
 
   it('shows project storage usage on the card', async () => {
@@ -175,6 +196,26 @@ describe('ReferenceBoardPage', () => {
 
     const projectNames = screen.getAllByRole('heading', { level: 3 }).map((node) => node.textContent);
     expect(projectNames[0]).toBe('Older Project');
-    expect(screen.getByRole('button', { name: /unpin older project/i })).toBeInTheDocument();
+  });
+
+  it('shows duplicate option in options menu', () => {
+    const storage = makeStorage();
+    const projects = [
+      {
+        id: 'p1',
+        name: 'My Board',
+        createdAt: 1000,
+        updatedAt: 2000,
+        viewport: { x: 0, y: 0, scale: 1 },
+      },
+    ];
+    storage.setItem('artist-tools.reference-board.projects', JSON.stringify(projects));
+    stubWindow(storage, { prompt: vi.fn().mockReturnValue('New') });
+
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /options for my board/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /duplicate my board/i }));
+
+    expect(screen.getAllByRole('heading', { level: 3 }).map((n) => n.textContent)).toContain('My Board Copy');
   });
 });

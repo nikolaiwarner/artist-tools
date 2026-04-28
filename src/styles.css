@@ -1113,7 +1113,6 @@ p {
   border-radius: 6px;
   background: var(--surface);
   box-shadow: var(--shadow);
-  overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -1145,7 +1144,7 @@ p {
   aspect-ratio: 4 / 3;
   overflow: hidden;
   display: block;
-  border-radius: 0;
+  border-radius: 6px 6px 0 0;
 }
 
 .refboard-thumbnail-btn:hover {
@@ -1205,11 +1204,62 @@ p {
 
 .refboard-card-actions {
   display: flex;
+  align-items: center;
   gap: 4px;
   margin-top: 4px;
 }
 
-.refboard-card-actions button {
+.refboard-card-menu-wrap {
+  position: relative;
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.refboard-card-menu {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  z-index: 100;
+  background: var(--surface);
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  min-width: 140px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.refboard-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  border-radius: 4px;
+  font-size: 0.84rem;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  height: auto;
+}
+
+.refboard-menu-item:hover {
+  background: var(--surface-strong);
+}
+
+.refboard-menu-item--danger {
+  color: #7a1b1b;
+}
+
+.refboard-menu-item--danger:hover {
+  background: #fdf0f0;
+}
+
+.refboard-card-actions > button {
   width: 30px;
   height: 30px;
   padding: 0;

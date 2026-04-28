@@ -966,54 +966,82 @@ export function ReferenceBoardCanvasPage() {
     [projectId]
   );
 
+  const captureThumbnailNow = useCallback(() => {
+    if (!projectId) return;
+
+    const stage = stageRef.current;
+    const allLayers = layersRef.current;
+    if (!stage || allLayers.length === 0) return;
+
+    // Compute bounding box of all layers in world space
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const layer of allLayers) {
+      const bounds = getLayerBounds(layer);
+      minX = Math.min(minX, bounds.minX);
+      minY = Math.min(minY, bounds.minY);
+      maxX = Math.max(maxX, bounds.maxX);
+      maxY = Math.max(maxY, bounds.maxY);
+    }
+
+    const pad = 20;
+    const worldW = Math.max(1, maxX - minX + pad * 2);
+    const worldH = Math.max(1, maxY - minY + pad * 2);
+
+    let dataUrl = '';
+    withTransformerNodesPreserved(transformerRef.current, () => {
+      const saved = {
+        x: stage.x(),
+        y: stage.y(),
+        scaleX: stage.scaleX(),
+        scaleY: stage.scaleY(),
+        width: stage.width(),
+        height: stage.height(),
+      };
+
+      stage.setAttrs({
+        x: -(minX - pad),
+        y: -(minY - pad),
+        scaleX: 1,
+        scaleY: 1,
+        width: Math.round(worldW),
+        height: Math.round(worldH),
+      });
+
+      dataUrl = captureStageWithBackground(
+        stage,
+        canvasBackgroundColor,
+        Math.round(worldW),
+        Math.round(worldH),
+        { pixelRatio: 0.5, mimeType: 'image/jpeg', quality: 0.9 }
+      );
+
+      stage.setAttrs(saved);
+      stage.batchDraw();
+    });
+
+    updateThumbnail(projectId, dataUrl);
+  }, [canvasBackgroundColor, projectId]);
+
   // Debounced thumbnail generation — captures all layers regardless of current viewport
   const scheduleThumbnail = useCallback(() => {
     if (!projectId) return;
     if (thumbnailTimerRef.current) clearTimeout(thumbnailTimerRef.current);
     thumbnailTimerRef.current = setTimeout(() => {
-      const stage = stageRef.current;
-      const allLayers = layersRef.current;
-      if (!stage || allLayers.length === 0) return;
-
-      // Compute bounding box of all layers in world space
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      for (const layer of allLayers) {
-        const bounds = getLayerBounds(layer);
-        minX = Math.min(minX, bounds.minX);
-        minY = Math.min(minY, bounds.minY);
-        maxX = Math.max(maxX, bounds.maxX);
-        maxY = Math.max(maxY, bounds.maxY);
-      }
-
-      const pad = 20;
-      const worldW = Math.max(1, maxX - minX + pad * 2);
-      const worldH = Math.max(1, maxY - minY + pad * 2);
-
-      let dataUrl = '';
-      withTransformerNodesPreserved(transformerRef.current, () => {
-        const saved = {
-          x: stage.x(), y: stage.y(),
-          scaleX: stage.scaleX(), scaleY: stage.scaleY(),
-          width: stage.width(), height: stage.height(),
-        };
-
-        stage.setAttrs({
-          x: -(minX - pad),
-          y: -(minY - pad),
-          scaleX: 1, scaleY: 1,
-          width: Math.round(worldW),
-          height: Math.round(worldH),
-        });
-
-        dataUrl = captureStageWithBackground(stage, canvasBackgroundColor, Math.round(worldW), Math.round(worldH), { pixelRatio: 0.5, mimeType: 'image/jpeg', quality: 0.9 });
-
-        stage.setAttrs(saved);
-        stage.batchDraw();
-      });
-
-      updateThumbnail(projectId, dataUrl);
+      captureThumbnailNow();
     }, 2000);
-  }, [projectId, canvasBackgroundColor]);
+  }, [captureThumbnailNow, projectId]);
+
+  const handleExitToProjects = useCallback(() => {
+    if (thumbnailTimerRef.current) {
+      clearTimeout(thumbnailTimerRef.current);
+      thumbnailTimerRef.current = null;
+    }
+    captureThumbnailNow();
+    navigate('/tools/reference-board');
+  }, [captureThumbnailNow, navigate]);
 
   useEffect(() => {
     scheduleThumbnailRef.current = scheduleThumbnail;
@@ -1775,7 +1803,7 @@ export function ReferenceBoardCanvasPage() {
       <section className="tool-layout">
         <div className="tool-hero">
           <p>Project not found.</p>
-          <button onClick={() => navigate('/tools/reference-board')}>Back to projects</button>
+          <button onClick={handleExitToProjects}>Back to projects</button>
         </div>
       </section>
     );
@@ -1789,7 +1817,7 @@ export function ReferenceBoardCanvasPage() {
     >
       {/* Toolbar */}
       <div className="refboard-toolbar">
-        <button className="refboard-toolbar-btn" onClick={() => navigate('/tools/reference-board')} title="Back to projects">
+        <button className="refboard-toolbar-btn" onClick={handleExitToProjects} title="Back to projects">
           <ArrowLeft size={16} />
         </button>
         <span className="refboard-project-title">{project?.name ?? ''}</span>

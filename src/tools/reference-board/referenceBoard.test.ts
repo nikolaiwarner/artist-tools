@@ -5,6 +5,7 @@ import {
   createProject,
   updateProject,
   deleteProject,
+  duplicateProject,
   bringToFront,
   sendToBack,
   bringForward,
@@ -111,6 +112,52 @@ describe('deleteProject', () => {
 
   it('returns false for unknown id', () => {
     expect(deleteProject('nope')).toBe(false);
+  });
+});
+
+describe('duplicateProject', () => {
+  it('returns null for unknown id', () => {
+    expect(duplicateProject('nope')).toBeNull();
+  });
+
+  it('creates a new project with "Copy" suffix', () => {
+    const original = createProject('Landscape');
+    const copy = duplicateProject(original.id);
+    expect(copy).not.toBeNull();
+    expect(copy!.name).toBe('Landscape Copy');
+  });
+
+  it('assigns a new unique id', () => {
+    const original = createProject('Flowers');
+    const copy = duplicateProject(original.id);
+    expect(copy!.id).not.toBe(original.id);
+  });
+
+  it('copies canvasBackgroundColor', () => {
+    const original = createProject('Seascape');
+    updateProject(original.id, { canvasBackgroundColor: '#abcdef' });
+    const copy = duplicateProject(original.id);
+    expect(copy!.canvasBackgroundColor).toBe('#abcdef');
+  });
+
+  it('does not copy pinned status or thumbnail', () => {
+    const original = createProject('Pinned');
+    updateProject(original.id, { pinned: true });
+    const copy = duplicateProject(original.id);
+    expect(copy!.pinned).toBe(false);
+  });
+
+  it('copies the thumbnail', () => {
+    const original = createProject('With Thumb');
+    updateProject(original.id, { thumbnailDataUrl: 'data:image/png;base64,thumb' });
+    const copy = duplicateProject(original.id);
+    expect(copy!.thumbnailDataUrl).toBe('data:image/png;base64,thumb');
+  });
+
+  it('persists the duplicate to storage', () => {
+    const original = createProject('Original');
+    duplicateProject(original.id);
+    expect(listProjects()).toHaveLength(2);
   });
 });
 
