@@ -43,6 +43,7 @@ import { LayerPanel } from './components/LayerPanel';
 import { TextEditor } from './components/TextEditor';
 import { CameraSourcePanel, type CameraFacingMode } from '../../components/CameraSourcePanel';
 import { SYNC_APPLIED_EVENT, type SyncAppliedDetail } from '../../sync/syncData';
+import { applyPosterizeToImageData, type PosterRenderMode } from '../../lib/posterize';
 
 const DEFAULT_CANVAS_BACKGROUND_COLOR = '#1f1f1f';
 const PROJECTS_STORAGE_KEY = 'artist-tools.reference-board.projects';
@@ -461,6 +462,34 @@ function createMaskedImageCanvas(
   return compositeCanvas;
 }
 
+function createPosterizedImageCanvas(
+  image: HTMLImageElement | HTMLCanvasElement,
+  mode: PosterRenderMode,
+  levels?: number,
+): HTMLCanvasElement {
+  const imageWidth = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
+  const imageHeight = image instanceof HTMLImageElement ? image.naturalHeight : image.height;
+  const width = Math.max(1, Math.round(imageWidth));
+  const height = Math.max(1, Math.round(imageHeight));
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    return canvas;
+  }
+
+  context.drawImage(image, 0, 0, width, height);
+  const transformed = applyPosterizeToImageData(context.getImageData(0, 0, width, height), {
+    mode,
+    levels,
+  });
+  context.putImageData(transformed, 0, 0);
+
+  return canvas;
+}
+
 // ── Image node (loads dataUrl from IndexedDB async) ──────────────────────────
 
 interface ImageNodeProps {
@@ -502,9 +531,18 @@ function ImageNode({
   const [maskImg] = useImage(maskDataUrl);
   const renderedImage = useMemo(() => {
     if (!img) return undefined;
-    if (!maskImg) return img;
-    return createMaskedImageCanvas(img, maskImg);
-  }, [img, maskImg]);
+
+    const maskedImage = maskImg ? createMaskedImageCanvas(img, maskImg) : img;
+    const tonalMode = layer.tonalMode ?? 'color';
+    const posterizeLevels = layer.posterizeLevels;
+    const hasPosterize = typeof posterizeLevels === 'number' && posterizeLevels >= 2;
+
+    if (tonalMode === 'color' && !hasPosterize) {
+      return maskedImage;
+    }
+
+    return createPosterizedImageCanvas(maskedImage, tonalMode, hasPosterize ? posterizeLevels : undefined);
+  }, [img, layer.posterizeLevels, layer.tonalMode, maskImg]);
 
   useEffect(() => {
     if (isSelected && transformerRef.current && nodeRef.current) {

@@ -17,6 +17,7 @@
 - **Reference Board** projects list supports search by project name and text-layer content.
 - **Reference Board** selected-layer settings panel now includes layer ordering controls (front/forward/backward/back).
 - **Reference Board** import/paste/camera image additions now auto-optimize image payload size client-side (downscale + smallest format selection) before IndexedDB/sync writes.
+- **Reference Board** image layers now support per-layer tonal controls (Black and White toggle + posterize levels 2-6).
 - The app is intended for GitHub Pages deployment.
 - Routing uses a hash router so tool pages work on static hosting.
 - The shared UI theme is intentionally barebones and compact to maximize visible tool workspace.
@@ -33,6 +34,7 @@
 - `src/components/AppMenuButton.tsx`: reusable menu trigger for top-level page heroes
 - `src/components/SendToReferenceBoardDialog.tsx`: reusable project select/create dialog for sending generated images into Reference Board
 - `src/components/CameraSourcePanel.tsx`: reusable camera source panel (start/stop, switch lens, pause, upload/capture) shared by Camera Tonal Study and Reference Board
+- `src/lib/posterize.ts`: shared grayscale/posterize image-data transform helpers used across tools
 - `src/pages/HomePage.tsx`: landing page and tool directory
 - `src/sync/syncTypes.ts`: sync payload and settings TypeScript types
 - `src/sync/syncData.ts`: granular entry collection/apply logic for localStorage + IndexedDB; also exports legacy `collectSnapshot`/`restoreSnapshot` for testing
@@ -48,7 +50,7 @@
 - `src/tools/canvas-builder/CanvasPreviewDiagram.tsx`: proportional SVG canvas visualization
 - `src/tools/canvas-builder/*.test.ts*`: tool-level tests
 - `src/tools/posterize-viewer/README.md`: **canonical feature spec** for Camera Tonal Study
-- `src/tools/posterize-viewer/posterize.ts`: grayscale and posterization transformation logic
+- `src/tools/posterize-viewer/posterize.ts`: Camera Tonal Study stage definitions + wrapper around shared posterize transforms
 - `src/tools/posterize-viewer/PosterizeViewerPage.tsx`: camera/image tonal study interface
 - Camera Tonal Study can send the current study frame directly into a Reference Board project as a new image layer.
 - Camera Tonal Study and Reference Board camera capture share the same camera source component for consistent behavior.

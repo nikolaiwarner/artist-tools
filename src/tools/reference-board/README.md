@@ -62,11 +62,14 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - Duplicating an image layer reuses the same stored image data; only a new layer record is created
 - Image layers can optionally carry a non-destructive grayscale mask asset that hides pixels without altering the original image
 - Image layers can auto-generate a non-destructive mask using on-device image segmentation (tries MODNet first, then fallback segmentation models; browser inference, no backend)
+- Image layers support grouped tonal controls per layer: segmented `Color`/`B&W` mode buttons plus posterize level chips (`Off`, `2`-`6`)
+- Tonal transforms use the shared pixel pipeline in `src/lib/posterize.ts` (also used by Camera Tonal Study)
 - Click/tap to select; click/tap empty canvas to deselect
 - Drag to reposition (single finger on mobile, click+drag on desktop)
 - **Desktop**: Konva Transformer handles on the selected layer for visual scale + rotate
 - **Mobile**: Transformer handles are supported via touch; pinch and rotate gestures available
 - **Layer panel** (opens as bottom drawer on mobile):
+  - Tonal controls: grouped Tonal section with `Color`/`B&W` mode buttons and horizontal posterize level chips
   - Flip horizontal / Flip vertical (icon buttons)
   - Opacity slider (0–100%)
   - Non-destructive crop: drag-handle overlay directly on canvas with rule-of-thirds grid lines; original image data is never modified
@@ -107,6 +110,7 @@ Reference Board is designed with first-class support for both desktop and mobile
 ### Mobile UI Adaptations
 - **Responsive Layout**: On screens narrower than 780px, the layer panel appears as a bottom drawer instead of a side panel, maximizing visible canvas space
 - **Touch-Optimized Buttons**: All toolbar and control buttons are 44×44px minimum on mobile for comfortable touch targets
+- **Thumb-first tonal controls**: tonal mode and posterize chips use larger touch targets in the mobile bottom drawer
 - **Drawer Animation**: Layer panel slides up from the bottom with smooth animation on mobile
 - **Landscape/Portrait**: Works in both orientations with responsive canvas sizing
 - **Viewport Optimization**: Touch scroll is disabled (`touch-action: none`) to allow custom canvas pan/zoom gestures
@@ -132,6 +136,7 @@ src/tools/reference-board/
   types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, ShapeLayer, CanvasLayer, Viewport)
   imageAssets.ts                    — pure helpers for shared base-image/mask asset references
   backgroundMask.ts                 — lazy-loaded segmentation-based background mask inference helper with model fallback
+  ../../lib/posterize.ts            — shared grayscale/posterize pixel transformation utilities
   referenceBoard.ts                 — pure project CRUD + layer-ordering helpers (no I/O except localStorage)
   referenceBoard.test.ts
   db.ts                             — IndexedDB wrapper using idb (images + layers), plus project text-layer search indexing helper

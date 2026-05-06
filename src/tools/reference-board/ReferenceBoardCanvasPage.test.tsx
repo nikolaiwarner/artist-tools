@@ -642,6 +642,56 @@ describe('ReferenceBoardCanvasPage', () => {
     expect(screen.getByTitle(/detect image mask/i)).not.toBeDisabled();
   });
 
+  it('updates image tonal controls from grouped tonal controls in the layer panel', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'img-layer-1',
+        projectId: 'proj-1',
+        type: 'image',
+        imageId: 'img-1',
+        x: 100,
+        y: 120,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 300,
+        height: 200,
+        scaleX: 1,
+        scaleY: 1,
+        flipX: false,
+        flipY: false,
+      },
+    ]);
+    vi.mocked(loadImage).mockResolvedValue('data:image/png;base64,base-image');
+
+    renderCanvas();
+
+    const imageNode = await screen.findByTestId('konva-image');
+    fireEvent.click(imageNode);
+
+    expect(await screen.findByRole('group', { name: /tonal controls/i })).toBeInTheDocument();
+
+    const bwModeButton = await screen.findByRole('button', { name: /black and white mode/i });
+    fireEvent.click(bwModeButton);
+
+    await vi.waitFor(() => {
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'img-layer-1',
+        tonalMode: 'grayscale',
+      }));
+    });
+
+    const levelFourButton = await screen.findByRole('button', { name: /posterize 4 levels/i });
+    fireEvent.click(levelFourButton);
+
+    await vi.waitFor(() => {
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'img-layer-1',
+        posterizeLevels: 4,
+      }));
+    });
+  });
+
   it('opens the mask drawing editor for a selected image layer', async () => {
     vi.mocked(loadLayersForProject).mockResolvedValueOnce([
       {

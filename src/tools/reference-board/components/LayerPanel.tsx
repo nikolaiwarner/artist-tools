@@ -85,6 +85,9 @@ export function LayerPanel({
     'Arial',
     'Helvetica',
   ];
+  const posterizeLevelValue = imageLayer?.posterizeLevels && imageLayer.posterizeLevels >= 2
+    ? imageLayer.posterizeLevels
+    : 0;
 
   return (
     <aside className="refboard-layer-panel">
@@ -158,6 +161,51 @@ export function LayerPanel({
 
       {imageLayer && (
         <>
+          <div className="refboard-panel-section">
+            <p className="refboard-panel-eyebrow">Tonal</p>
+            <div className="refboard-tonal-group" role="group" aria-label="Tonal controls">
+              <div className="refboard-tonal-modes" role="group" aria-label="Tonal mode">
+                <button
+                  type="button"
+                  aria-label="Color mode"
+                  aria-pressed={(imageLayer.tonalMode ?? 'color') === 'color'}
+                  className={(imageLayer.tonalMode ?? 'color') === 'color' ? 'refboard-tonal-mode-btn refboard-toggle-active' : 'refboard-tonal-mode-btn'}
+                  onClick={() => onUpdate({ tonalMode: 'color' } as Partial<ImageLayer>)}
+                >
+                  Color
+                </button>
+                <button
+                  type="button"
+                  aria-label="Black and White mode"
+                  aria-pressed={(imageLayer.tonalMode ?? 'color') === 'grayscale'}
+                  className={(imageLayer.tonalMode ?? 'color') === 'grayscale' ? 'refboard-tonal-mode-btn refboard-toggle-active' : 'refboard-tonal-mode-btn'}
+                  onClick={() => onUpdate({ tonalMode: 'grayscale' } as Partial<ImageLayer>)}
+                >
+                  B/W
+                </button>
+              </div>
+
+              <div className="refboard-tonal-levels" role="group" aria-label="Posterize level">
+                {[0, 2, 3, 4, 5, 6].map((level) => {
+                  const active = level === posterizeLevelValue;
+                  const label = level === 0 ? 'All' : String(level);
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      aria-label={level === 0 ? 'Posterize off' : `Posterize ${level} levels`}
+                      aria-pressed={active}
+                      className={active ? 'refboard-tonal-level-chip refboard-toggle-active' : 'refboard-tonal-level-chip'}
+                      onClick={() => onUpdate({ posterizeLevels: level === 0 ? undefined : level } as Partial<ImageLayer>)}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="refboard-panel-section">
             <p className="refboard-panel-eyebrow">Flip</p>
             <div className="refboard-panel-row">

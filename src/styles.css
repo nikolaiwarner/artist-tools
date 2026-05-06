@@ -1680,6 +1680,49 @@ p {
   color: #f2fbf8;
 }
 
+.refboard-tonal-group {
+  display: grid;
+  gap: 8px;
+}
+
+.refboard-tonal-modes,
+.refboard-tonal-levels {
+  display: flex;
+  gap: 6px;
+}
+
+.refboard-tonal-modes {
+  width: 100%;
+}
+
+.refboard-tonal-mode-btn {
+  flex: 1;
+  min-height: 34px;
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  background: var(--surface-strong);
+  color: #171717;
+  font-size: 0.8rem;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.refboard-tonal-levels {
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.refboard-tonal-level-chip {
+  min-width: 44px;
+  min-height: 34px;
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  background: var(--surface-strong);
+  color: #171717;
+  font-size: 0.78rem;
+  font-family: 'IBM Plex Mono', monospace;
+  white-space: nowrap;
+}
+
 /* Icon buttons in layer panel */
 
 .refboard-icon-btn {
@@ -2053,6 +2096,21 @@ p {
 
   .refboard-toolbar {
     flex-wrap: wrap;
+  }
+
+  .refboard-tonal-group {
+    gap: 10px;
+  }
+
+  .refboard-tonal-mode-btn {
+    min-height: 44px;
+    font-size: 0.86rem;
+  }
+
+  .refboard-tonal-level-chip {
+    min-width: 52px;
+    min-height: 44px;
+    font-size: 0.84rem;
   }
 }
 /* ─── Sync page ─────────────────────────────────────────────────────────── */

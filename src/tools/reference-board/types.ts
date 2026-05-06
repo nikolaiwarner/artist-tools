@@ -37,6 +37,8 @@ export interface ImageLayer extends BaseLayer {
   type: 'image';
   imageId: string;
   maskImageId?: string;
+  tonalMode?: 'color' | 'grayscale';
+  posterizeLevels?: number;
   width: number;
   height: number;
   scaleX: number;

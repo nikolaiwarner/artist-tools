@@ -54,6 +54,7 @@ If the repository name changes, update the production base path in `vite.config.
 - `src/components/AppMenuButton.tsx` provides the reusable menu trigger used on top-level pages
 - `src/components/SendToReferenceBoardDialog.tsx` provides a reusable project-select/create dialog used by tools that send images into Reference Board
 - `src/components/CameraSourcePanel.tsx` provides shared camera source controls and preview used by Camera Tonal Study and Reference Board camera capture
+- `src/lib/posterize.ts` provides reusable grayscale/posterize pixel transforms shared by Camera Tonal Study and Reference Board
 - `src/pages/HomePage.tsx` contains the landing page and tool index
 - `src/sync/` contains the Yjs realtime sync page, app-level runtime bootstrap, and local data replication helpers
 - `src/tools/canvas-builder/` contains the first tool UI, calculator logic, diagram component, and tests
@@ -144,6 +145,7 @@ Key features:
 - Imported/pasted/captured images are auto-optimized client-side by downscaling and selecting the smallest encoded output (JPEG/WebP/PNG) before storage/sync
 - Per-project canvas background color picker in the toolbar (persisted locally)
 - Rotate/scale via canvas handles, plus flip H/V, opacity, non-destructive crop per image layer
+- Per-image tonal controls are grouped into a compact Tonal section (Color/B&W mode buttons + posterize level chips for off or 2-6 levels), using the same posterize pipeline as Camera Tonal Study
 - Optional non-destructive image masks per image layer, including automatic on-device segmentation detection (MODNet-first with fallback models) plus draw/edit/clear controls
 - Duplicating image layers reuses the same stored image data (no duplicate image blob writes)
 - Text layers with font, size, bold/italic, color, and alignment controls
