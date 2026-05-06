@@ -1,6 +1,11 @@
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { collectAllEntries, applyEntry, subscribeToLocalDataChanges } from './syncData';
+import {
+  collectAllEntries,
+  applyEntry,
+  subscribeToLocalDataChanges,
+  MAX_YJS_SYNC_IMAGE_BYTES,
+} from './syncData';
 
 const WRITE_DEBOUNCE_MS = 150;
 // v2 map name ensures clean separation from any legacy single-blob data
@@ -55,7 +60,10 @@ export function startYjsAutoSync(
   async function pushLocalToYjs(): Promise<void> {
     if (stopped || applyingRemote) return;
     try {
-      const currentEntries = await collectAllEntries();
+      const {
+        entries: currentEntries,
+      } = await collectAllEntries({ maxImageBytes: MAX_YJS_SYNC_IMAGE_BYTES });
+
       doc.transact(() => {
         for (const [k, v] of currentEntries) {
           if (lastKnownEntries.get(k) !== v) {

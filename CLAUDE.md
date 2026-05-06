@@ -15,6 +15,8 @@
 - **Reference Board** saves the latest project thumbnail immediately when leaving a canvas back to the projects list.
 - **Reference Board** can capture still images directly from the device camera inside the canvas toolbar.
 - **Reference Board** projects list supports search by project name and text-layer content.
+- **Reference Board** selected-layer settings panel now includes layer ordering controls (front/forward/backward/back).
+- **Reference Board** import/paste/camera image additions now auto-optimize image payload size client-side (downscale + smallest format selection) before IndexedDB/sync writes.
 - The app is intended for GitHub Pages deployment.
 - Routing uses a hash router so tool pages work on static hosting.
 - The shared UI theme is intentionally barebones and compact to maximize visible tool workspace.
@@ -144,6 +146,7 @@ Pages using this feature simply:
 - Sync page includes manual full backup export/import as JSON for local migration and recovery.
 - **Granular sync model**: each piece of data is a separate Yjs map entry with a prefixed key (`ls:`, `db:image:`, `db:layer:`), so changes to different tools/entities never overwrite each other.
 - Synced data includes all `artist-tools.*` localStorage keys except sync config keys under the `artist-tools.sync*` prefix, plus all Reference Board IndexedDB image/layer records.
+- Realtime sync keeps all Reference Board image assets synchronized, chunking images above 4 MB into multiple Yjs entries so transport/state updates stay smooth while preserving full fidelity.
 - Server data model is one Yjs room per sync key (`artist-tools-sync-v2` map); many users are supported by using different keys.
 - Initial connect is remote-first: existing room state is applied per-entry before pushing local-only entries to Yjs.
 - Applying remote entries never deletes unrelated local data — each key is updated independently.

@@ -1,4 +1,14 @@
-import { Copy, Trash2, FlipHorizontal2, FlipVertical2, Crop } from 'lucide-react';
+import {
+  Copy,
+  Trash2,
+  FlipHorizontal2,
+  FlipVertical2,
+  Crop,
+  ChevronsUp,
+  ChevronUp,
+  ChevronDown,
+  ChevronsDown,
+} from 'lucide-react';
 import type { CanvasLayer, ImageLayer, ShapeLayer, TextLayer } from '../types';
 
 // ── Component ──────────────────────────────────────────────────────────────────
@@ -8,6 +18,10 @@ interface LayerPanelProps {
   onUpdate: (patch: Partial<CanvasLayer>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
+  onBringToFront?: () => void;
+  onBringForward?: () => void;
+  onSendBackward?: () => void;
+  onSendToBack?: () => void;
   onFlipH?: () => void;
   onFlipV?: () => void;
   onCropStart?: () => void;
@@ -22,6 +36,10 @@ export function LayerPanel({
   onUpdate,
   onDelete,
   onDuplicate,
+  onBringToFront,
+  onBringForward,
+  onSendBackward,
+  onSendToBack,
   onFlipH,
   onFlipV,
   onCropStart,
@@ -80,6 +98,44 @@ export function LayerPanel({
           </button>
           <button onClick={onDelete} className="refboard-icon-btn refboard-delete-btn" title="Delete layer">
             <Trash2 size={15} />
+          </button>
+        </div>
+      </div>
+
+      <div className="refboard-panel-section">
+        <p className="refboard-panel-eyebrow">Order</p>
+        <div className="refboard-panel-row">
+          <button
+            onClick={onBringToFront}
+            className="refboard-icon-btn"
+            title="Bring selected layer to front"
+            aria-label="Bring selected layer to front"
+          >
+            <ChevronsUp size={15} />
+          </button>
+          <button
+            onClick={onBringForward}
+            className="refboard-icon-btn"
+            title="Bring selected layer forward"
+            aria-label="Bring selected layer forward"
+          >
+            <ChevronUp size={15} />
+          </button>
+          <button
+            onClick={onSendBackward}
+            className="refboard-icon-btn"
+            title="Send selected layer backward"
+            aria-label="Send selected layer backward"
+          >
+            <ChevronDown size={15} />
+          </button>
+          <button
+            onClick={onSendToBack}
+            className="refboard-icon-btn"
+            title="Send selected layer to back"
+            aria-label="Send selected layer to back"
+          >
+            <ChevronsDown size={15} />
           </button>
         </div>
       </div>

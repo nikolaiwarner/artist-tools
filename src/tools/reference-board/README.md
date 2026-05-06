@@ -58,7 +58,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - Capture a still directly from the device camera via the **camera icon** toolbar button
 - On mobile, tap the image icon or drag a file from another app onto the canvas
 - Clipboard image paste (Ctrl/Cmd+V on desktop; paste after copying an image on mobile) creates a new image layer from pasted image data
-- Images are compressed for web (max 2400px, JPEG quality 0.85) on import
+- Images are auto-optimized on import/paste/camera capture by downscaling very large dimensions and choosing the smallest encoded result across JPEG/WebP/PNG (with iterative quality/size reduction when needed)
 - Duplicating an image layer reuses the same stored image data; only a new layer record is created
 - Image layers can optionally carry a non-destructive grayscale mask asset that hides pixels without altering the original image
 - Image layers can auto-generate a non-destructive mask using on-device image segmentation (tries MODNet first, then fallback segmentation models; browser inference, no backend)
@@ -91,7 +91,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Mobile**: Long-press (hold 500ms) on a layer to open context menu with the same layer ordering options
 - Context menu also provides Copy, Delete, and Duplicate
 - Right-clicking empty canvas space shows a Paste option (when layers have been copied)
-- Layer panel provides duplicate (copy icon) and delete (trash icon) buttons
+- Layer panel provides duplicate (copy icon), delete (trash icon), and ordering buttons (Top/Up/Down/Bottom)
 
 ### Mobile-First Experience
 

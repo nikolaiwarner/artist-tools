@@ -6,6 +6,8 @@ import {
   applyEntry,
   buildBackupDocument,
   parseBackupDocument,
+  GRANULAR_IMAGE_META_PREFIX,
+  GRANULAR_IMAGE_CHUNK_PREFIX,
 } from './syncData';
 
 const dbMocks = vi.hoisted(() => ({
@@ -112,7 +114,7 @@ describe('syncData', () => {
       localStorage.setItem('other-app', 'ignored');
       dbMocks.exportAllDBData.mockResolvedValue({ images: {}, layers: [] });
 
-      const entries = await collectAllEntries();
+      const { entries } = await collectAllEntries();
 
       expect(entries.get('ls:artist-tools.art-pricing')).toBe('{"x":1}');
       expect(entries.get('ls:artist-tools.canvas-builder')).toBe('{"y":2}');
@@ -127,7 +129,7 @@ describe('syncData', () => {
         layers: [],
       });
 
-      const entries = await collectAllEntries();
+      const { entries } = await collectAllEntries();
 
       expect(entries.get('db:image:img1')).toBe('data:image/png;base64,abc');
       expect(entries.get('db:image:img2')).toBe('data:image/jpeg;base64,xyz');
@@ -137,9 +139,48 @@ describe('syncData', () => {
       const layer = { id: 'layer1', type: 'text' as const, projectId: 'p1', x: 0, y: 0, width: 100, height: 50, text: 'hello', fontSize: 14, color: '#000', rotation: 0 };
       dbMocks.exportAllDBData.mockResolvedValue({ images: {}, layers: [layer] });
 
-      const entries = await collectAllEntries();
+      const { entries } = await collectAllEntries();
 
       expect(JSON.parse(entries.get('db:layer:layer1')!)).toMatchObject({ id: 'layer1', type: 'text' });
+    });
+
+    it('skips oversized db:image: entries when maxImageBytes is provided', async () => {
+      dbMocks.exportAllDBData.mockResolvedValue({
+        images: {
+          small: 'data:image/png;base64,abc',
+          large: `data:image/png;base64,${'x'.repeat(128)}`,
+        },
+        layers: [],
+      });
+
+      const result = await collectAllEntries({ maxImageBytes: 40 });
+
+      expect(result.entries.get('db:image:small')).toBe('data:image/png;base64,abc');
+      expect(result.entries.has('db:image:large')).toBe(false);
+      expect(result.skippedImageCount).toBe(0);
+      expect(result.skippedImageEntryKeys.size).toBe(0);
+      expect(result.entries.get(`${GRANULAR_IMAGE_META_PREFIX}large`)).toBeDefined();
+      expect(result.entries.get(`${GRANULAR_IMAGE_CHUNK_PREFIX}large:0`)).toBeDefined();
+    });
+
+    it('splits large images into chunked entries', async () => {
+      dbMocks.exportAllDBData.mockResolvedValue({
+        images: {
+          large: `data:image/png;base64,${'x'.repeat(256)}`,
+        },
+        layers: [],
+      });
+
+      const result = await collectAllEntries({ maxImageBytes: 60 });
+      const metaKey = `${GRANULAR_IMAGE_META_PREFIX}large`;
+
+      expect(result.entries.has('db:image:large')).toBe(false);
+      expect(result.entries.get(metaKey)).toBeDefined();
+
+      const meta = JSON.parse(result.entries.get(metaKey)!);
+      expect(meta.parts).toBeGreaterThan(1);
+      expect(result.entries.get(`${GRANULAR_IMAGE_CHUNK_PREFIX}large:0`)).toBeDefined();
+      expect(result.entries.get(`${GRANULAR_IMAGE_CHUNK_PREFIX}large:1`)).toBeDefined();
     });
   });
 
@@ -195,6 +236,22 @@ describe('syncData', () => {
       dbMocks.deleteImage.mockResolvedValue(undefined);
       await applyEntry('db:image:img1', null);
       expect(dbMocks.deleteImage).toHaveBeenCalledWith('img1');
+    });
+
+    it('reassembles chunked image after receiving metadata and all chunks', async () => {
+      dbMocks.saveImage.mockResolvedValue(undefined);
+      const chunkA = 'data:image/png;base64,abc';
+      const chunkB = 'def';
+
+      await applyEntry(`${GRANULAR_IMAGE_CHUNK_PREFIX}img-chunked:0`, chunkA);
+      expect(dbMocks.saveImage).not.toHaveBeenCalled();
+
+      await applyEntry(`${GRANULAR_IMAGE_META_PREFIX}img-chunked`, JSON.stringify({ parts: 2 }));
+      expect(dbMocks.saveImage).not.toHaveBeenCalled();
+
+      await applyEntry(`${GRANULAR_IMAGE_CHUNK_PREFIX}img-chunked:1`, chunkB);
+
+      expect(dbMocks.saveImage).toHaveBeenCalledWith('img-chunked', `${chunkA}${chunkB}`);
     });
 
     it('calls saveLayer with parsed layer for db:layer: key with a value', async () => {

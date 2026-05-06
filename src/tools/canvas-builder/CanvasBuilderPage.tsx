@@ -6,12 +6,21 @@ import { buildCanvasPlan, defaultCanvasInput, type CanvasPlanInput } from './can
 import { CanvasPreviewDiagram } from './CanvasPreviewDiagram';
 
 const STORAGE_KEY = 'artist-tools.canvas-builder';
+const HANGER_VISIBILITY_STORAGE_KEY = 'artist-tools.canvas-builder.show-hanger-placement';
 
 export function CanvasBuilderPage() {
   const [formState, setFormState] = useSyncedLocalStorage<CanvasPlanInput>(
     STORAGE_KEY,
     defaultCanvasInput,
     (raw) => ({ ...defaultCanvasInput, ...JSON.parse(raw) } as CanvasPlanInput)
+  );
+  const [showHangerPlacement, setShowHangerPlacement] = useSyncedLocalStorage<boolean>(
+    HANGER_VISIBILITY_STORAGE_KEY,
+    true,
+    (raw) => {
+      const parsed = JSON.parse(raw);
+      return typeof parsed === 'boolean' ? parsed : true;
+    }
   );
 
   const plan = buildCanvasPlan(formState);
@@ -73,6 +82,16 @@ export function CanvasBuilderPage() {
             <span>Canvas Quantity</span>
             <input name="quantity" type="number" min="1" step="1" value={formState.quantity} onChange={handleNumberChange} />
           </label>
+          <label className="builder-checkbox-label">
+            <span>Show hanger placement</span>
+            <input
+              className="builder-checkbox-input"
+              name="showHangerPlacement"
+              type="checkbox"
+              checked={showHangerPlacement}
+              onChange={(event) => setShowHangerPlacement(event.target.checked)}
+            />
+          </label>
         </form>
 
         <section className="builder-panel results-panel" aria-live="polite">
@@ -109,6 +128,7 @@ export function CanvasBuilderPage() {
               height={formState.height}
               woodWidth={formState.stretcherWidth}
               supportBraces={plan.supportBraces}
+              showHangerPlacement={showHangerPlacement}
             />
           </div>
         </section>

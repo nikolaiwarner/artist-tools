@@ -98,7 +98,7 @@ Current output includes:
 - total wood length in feet
 - fabric cut dimensions based on depth and wrap margin
 - total fabric area in square feet
-- a proportional SVG diagram showing canvas aspect ratio, stretcher bar width, 45-degree mitre corners, dimensions, and support brace placement
+- a proportional SVG diagram showing canvas aspect ratio, stretcher bar width, 45-degree mitre corners, dimensions, support brace placement, and optional typical wire hanger screw positions (enabled by default), including a top-to-hanger vertical offset indicator with supporting notes shown below the drawing
 
 The form state is saved in local storage so recent inputs persist between visits.
 
@@ -141,6 +141,7 @@ Key features:
 - Pan (scroll / space+drag) and zoom (ctrl+scroll / trackpad pinch)
 - Import images via toolbar button or drag-and-drop
 - Capture still images directly from the camera via toolbar button
+- Imported/pasted/captured images are auto-optimized client-side by downscaling and selecting the smallest encoded output (JPEG/WebP/PNG) before storage/sync
 - Per-project canvas background color picker in the toolbar (persisted locally)
 - Rotate/scale via canvas handles, plus flip H/V, opacity, non-destructive crop per image layer
 - Optional non-destructive image masks per image layer, including automatic on-device segmentation detection (MODNet-first with fallback models) plus draw/edit/clear controls
@@ -148,6 +149,7 @@ Key features:
 - Text layers with font, size, bold/italic, color, and alignment controls
 - Box layers for composition guides with resizable rectangle bounds plus stroke/fill controls
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
+- Selected-layer panel buttons for ordering (front/forward/backward/back) in addition to duplicate/delete controls
 - Ctrl/Cmd+C and Ctrl/Cmd+V layer copy/paste uses the system clipboard, including cross-project paste
 - Cross-project pastes duplicate image/mask assets with new IDs so asset identities stay unique between projects
 - Images and mask assets stored in IndexedDB; project metadata stored in localStorage
@@ -165,6 +167,7 @@ Key behaviors:
 - Posterize Viewer syncs the shared study controls (`renderMode`, active stage, camera facing preference)
 - Initial connect is remote-first: if remote state exists, it is applied to the client
 - Sync settings remain local to each device; any localStorage key under `artist-tools.sync*` is excluded from synced content
+- Reference Board image data syncs fully, including large images, by splitting oversized image payloads into smaller Yjs chunk entries to avoid large single-entry websocket/state spikes
 - Remote restore is non-destructive for unrelated localStorage keys (missing keys are not auto-deleted)
 - Backup export/import is available in the Sync page to save and restore all tool data as a JSON file (all `artist-tools.*` localStorage data except sync settings, plus Reference Board IndexedDB images/layers)
 

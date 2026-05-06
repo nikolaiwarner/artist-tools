@@ -25,6 +25,19 @@ const EXCLUDED_PREFIXES = ['artist-tools.sync'];
 const DB_CHANGE_EVENT = 'artist-tools:reference-board-db-change';
 export const SYNC_APPLIED_EVENT = 'artist-tools:sync-applied';
 const BACKUP_FORMAT = 'artist-tools-backup';
+const textEncoder = new TextEncoder();
+export const MAX_YJS_SYNC_IMAGE_BYTES = 4 * 1024 * 1024;
+
+export interface CollectAllEntriesOptions {
+  maxImageBytes?: number;
+}
+
+export interface CollectedEntries {
+  entries: Map<string, string>;
+  skippedImageEntryKeys: Set<string>;
+  skippedImageCount: number;
+  skippedImageBytes: number;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -186,11 +199,61 @@ export function parseBackupDocument(jsonText: string): SyncSnapshot {
 
 export const GRANULAR_LS_PREFIX = 'ls:';
 export const GRANULAR_IMAGE_PREFIX = 'db:image:';
+export const GRANULAR_IMAGE_META_PREFIX = 'db:image-meta:';
+export const GRANULAR_IMAGE_CHUNK_PREFIX = 'db:image-chunk:';
 export const GRANULAR_LAYER_PREFIX = 'db:layer:';
 
+type ChunkedImageMeta = {
+  parts: number;
+};
+
+const pendingChunkedImageMeta = new Map<string, ChunkedImageMeta>();
+const pendingChunkedImageParts = new Map<string, Map<number, string>>();
+
+function splitStringIntoChunks(value: string, maxChunkBytes: number): string[] {
+  const chunks: string[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    let end = Math.min(cursor + maxChunkBytes, value.length);
+    // Data URLs are ASCII, but this keeps behavior safe if a non-ASCII string appears.
+    while (end > cursor && textEncoder.encode(value.slice(cursor, end)).length > maxChunkBytes) {
+      end -= 1;
+    }
+    if (end === cursor) {
+      end = Math.min(cursor + 1, value.length);
+    }
+    chunks.push(value.slice(cursor, end));
+    cursor = end;
+  }
+  return chunks;
+}
+
+async function tryCommitChunkedImage(imageId: string): Promise<boolean> {
+  const meta = pendingChunkedImageMeta.get(imageId);
+  const partsMap = pendingChunkedImageParts.get(imageId);
+  if (!meta || !partsMap) return false;
+  if (!Number.isInteger(meta.parts) || meta.parts <= 0) return false;
+  if (partsMap.size < meta.parts) return false;
+
+  const orderedParts: string[] = [];
+  for (let i = 0; i < meta.parts; i++) {
+    const part = partsMap.get(i);
+    if (typeof part !== 'string') return false;
+    orderedParts.push(part);
+  }
+
+  await saveImage(imageId, orderedParts.join(''));
+  pendingChunkedImageMeta.delete(imageId);
+  pendingChunkedImageParts.delete(imageId);
+  return true;
+}
+
 /** Collect all syncable local data as a flat yjsKey → value map. */
-export async function collectAllEntries(): Promise<Map<string, string>> {
+export async function collectAllEntries(options: CollectAllEntriesOptions = {}): Promise<CollectedEntries> {
   const entries = new Map<string, string>();
+  const skippedImageEntryKeys = new Set<string>();
+  const maxImageBytes = options.maxImageBytes ?? Number.POSITIVE_INFINITY;
+  let skippedImageBytes = 0;
 
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -201,13 +264,28 @@ export async function collectAllEntries(): Promise<Map<string, string>> {
 
   const { images, layers } = await exportAllDBData();
   for (const [id, dataUrl] of Object.entries(images)) {
-    entries.set(`${GRANULAR_IMAGE_PREFIX}${id}`, dataUrl);
+    const imageEntryKey = `${GRANULAR_IMAGE_PREFIX}${id}`;
+    const imageBytes = textEncoder.encode(dataUrl).length;
+    if (imageBytes > maxImageBytes) {
+      const chunks = splitStringIntoChunks(dataUrl, maxImageBytes);
+      entries.set(`${GRANULAR_IMAGE_META_PREFIX}${id}`, JSON.stringify({ parts: chunks.length }));
+      chunks.forEach((chunk, index) => {
+        entries.set(`${GRANULAR_IMAGE_CHUNK_PREFIX}${id}:${index}`, chunk);
+      });
+      continue;
+    }
+    entries.set(imageEntryKey, dataUrl);
   }
   for (const layer of layers) {
     entries.set(`${GRANULAR_LAYER_PREFIX}${layer.id}`, JSON.stringify(layer));
   }
 
-  return entries;
+  return {
+    entries,
+    skippedImageEntryKeys,
+    skippedImageCount: skippedImageEntryKeys.size,
+    skippedImageBytes,
+  };
 }
 
 /**
@@ -230,12 +308,63 @@ export async function applyEntry(yjsKey: string, value: string | null): Promise<
     }
   } else if (yjsKey.startsWith(GRANULAR_IMAGE_PREFIX)) {
     const imageId = yjsKey.slice(GRANULAR_IMAGE_PREFIX.length);
+    pendingChunkedImageMeta.delete(imageId);
+    pendingChunkedImageParts.delete(imageId);
     if (value === null) {
       await deleteImage(imageId);
     } else {
       await saveImage(imageId, value);
     }
     if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
+        detail: { kind: 'db-image', id: imageId },
+      }));
+    }
+  } else if (yjsKey.startsWith(GRANULAR_IMAGE_META_PREFIX)) {
+    const imageId = yjsKey.slice(GRANULAR_IMAGE_META_PREFIX.length);
+    if (value === null) {
+      pendingChunkedImageMeta.delete(imageId);
+      pendingChunkedImageParts.delete(imageId);
+      await deleteImage(imageId);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
+          detail: { kind: 'db-image', id: imageId },
+        }));
+      }
+      return;
+    }
+
+    const parsed = JSON.parse(value) as ChunkedImageMeta;
+    pendingChunkedImageMeta.set(imageId, parsed);
+    const committed = await tryCommitChunkedImage(imageId);
+    if (committed && typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
+        detail: { kind: 'db-image', id: imageId },
+      }));
+    }
+  } else if (yjsKey.startsWith(GRANULAR_IMAGE_CHUNK_PREFIX)) {
+    const suffix = yjsKey.slice(GRANULAR_IMAGE_CHUNK_PREFIX.length);
+    const delimiterIndex = suffix.lastIndexOf(':');
+    if (delimiterIndex === -1) return;
+    const imageId = suffix.slice(0, delimiterIndex);
+    const partIndex = Number(suffix.slice(delimiterIndex + 1));
+    if (!Number.isInteger(partIndex) || partIndex < 0) return;
+
+    const parts = pendingChunkedImageParts.get(imageId) ?? new Map<number, string>();
+    if (value === null) {
+      parts.delete(partIndex);
+    } else {
+      parts.set(partIndex, value);
+    }
+
+    if (parts.size === 0) {
+      pendingChunkedImageParts.delete(imageId);
+    } else {
+      pendingChunkedImageParts.set(imageId, parts);
+    }
+
+    const committed = await tryCommitChunkedImage(imageId);
+    if (committed && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {
         detail: { kind: 'db-image', id: imageId },
       }));

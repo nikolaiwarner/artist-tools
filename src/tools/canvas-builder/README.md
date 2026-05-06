@@ -13,6 +13,7 @@ A supply planning tool for stretching custom canvases. Given canvas dimensions a
 | Wrap margin | Extra fabric beyond the depth that wraps and staples to the back, in inches | 3 |
 | Support threshold | Minimum side length in inches that triggers a cross brace | 30 |
 | Canvas quantity | Number of identical canvases to plan | 1 |
+| Show hanger placement | Show/hide wire-hanger screw guidance overlays in the diagram | On |
 
 Form state is persisted to `localStorage` under the key `artist-tools.canvas-builder` and restored on next visit.
 
@@ -55,6 +56,10 @@ A proportional SVG preview scaled to fit a 360×280 viewport with 34 px padding 
 - 45-degree mitre corners shown as diagonal lines at each corner of the inner frame.
 - Dimension labels above and to the left with leader tick marks, showing the width and height in inches.
 - Support brace lines: 1 brace = horizontal cross-bar at the vertical midpoint; 2 braces = horizontal + vertical cross-bars at both midpoints.
+- Optional wire hanger guidance (on by default): two screw markers on the side bars plus a wire arc, with a size-based recommendation text for how far down from the top edge to place the screws.
+- A right-side vertical measurement indicator marks the top-to-hanger drop distance in the diagram.
+- Secondary diagram notes such as bar width and hanger guidance are shown below the SVG so the drawing stays readable at small sizes.
+- For canvases where one-third height would exceed 12 inches, the diagram adds a guidance note recommending cleat or two-hook hanging methods.
 
 ## Files
 

@@ -418,6 +418,71 @@ describe('ReferenceBoardCanvasPage', () => {
     expect(saveLayer).toHaveBeenCalled();
   });
 
+  it('shows layer ordering controls in the layer panel and reorders selected layer', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 40,
+        y: 60,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 200,
+        height: 120,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+      {
+        id: 'shape-layer-2',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 280,
+        y: 240,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 2,
+        width: 200,
+        height: 120,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]);
+
+    renderCanvas();
+
+    const shapeNodes = await screen.findAllByTestId('konva-rect');
+    fireEvent.click(shapeNodes[0]);
+
+    expect(await screen.findByTitle(/bring selected layer to front/i)).toBeInTheDocument();
+    expect(await screen.findByTitle(/bring selected layer forward/i)).toBeInTheDocument();
+    expect(await screen.findByTitle(/send selected layer backward/i)).toBeInTheDocument();
+    expect(await screen.findByTitle(/send selected layer to back/i)).toBeInTheDocument();
+    expect(screen.queryByText('Top')).not.toBeInTheDocument();
+    expect(screen.queryByText('Up')).not.toBeInTheDocument();
+    expect(screen.queryByText('Down')).not.toBeInTheDocument();
+    expect(screen.queryByText('Bottom')).not.toBeInTheDocument();
+
+    const bringToFrontButton = await screen.findByTitle(/bring selected layer to front/i);
+    fireEvent.click(bringToFrontButton);
+
+    await vi.waitFor(() => {
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'shape-layer-1',
+        zIndex: 3,
+      }));
+    });
+  });
+
   it('loads both base image and mask assets for a masked image layer', async () => {
     vi.mocked(loadLayersForProject).mockResolvedValueOnce([
       {
@@ -1248,7 +1313,15 @@ describe('ReferenceBoardCanvasPage', () => {
     const getContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext')
       .mockReturnValue({ drawImage: vi.fn() } as unknown as CanvasRenderingContext2D);
     const toDataUrlSpy = vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL')
-      .mockReturnValue('data:image/png;base64,compressed');
+      .mockImplementation((mimeType?: string) => {
+        if (mimeType === 'image/webp') {
+          return 'data:image/webp;base64,much-larger-than-jpeg-size';
+        }
+        if (mimeType === 'image/jpeg') {
+          return 'data:image/jpeg;base64,smallest-size';
+        }
+        return 'data:image/png;base64,very-large-size';
+      });
 
     class MockFileReader {
       result: string | ArrayBuffer | null = null;
@@ -1256,7 +1329,7 @@ describe('ReferenceBoardCanvasPage', () => {
       onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
 
       readAsDataURL() {
-        this.result = 'data:image/png;base64,raw';
+        this.result = `data:image/png;base64,${'r'.repeat(5000)}`;
         this.onload?.call(this as unknown as FileReader, {} as ProgressEvent<FileReader>);
       }
     }
@@ -1304,6 +1377,7 @@ describe('ReferenceBoardCanvasPage', () => {
       expect(saveImage).toHaveBeenCalled();
       expect(saveLayer).toHaveBeenCalled();
     });
+    expect(saveImage).toHaveBeenCalledWith(expect.any(String), 'data:image/jpeg;base64,smallest-size');
     expect(preventDefault).toHaveBeenCalled();
 
     vi.stubGlobal('FileReader', originalFileReader);

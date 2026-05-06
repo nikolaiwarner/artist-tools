@@ -345,6 +345,17 @@ function captureStageTransparent(stage: Konva.Stage, options: { mimeType?: strin
 
 // ── Image compression ──────────────────────────────────────────────────────────
 
+function dataUrlByteLength(dataUrl: string): number {
+  return new TextEncoder().encode(dataUrl).length;
+}
+
+function pickSmallestDataUrl(candidates: string[]): string {
+  if (candidates.length === 0) return '';
+  return candidates.reduce((smallest, current) => {
+    return dataUrlByteLength(current) < dataUrlByteLength(smallest) ? current : smallest;
+  });
+}
+
 async function compressImage(dataUrl: string, maxDim = 2400, quality = 0.85): Promise<string> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
@@ -352,20 +363,46 @@ async function compressImage(dataUrl: string, maxDim = 2400, quality = 0.85): Pr
     image.onerror = reject;
     image.src = dataUrl;
   });
-  let w = img.naturalWidth;
-  let h = img.naturalHeight;
-  if (w > maxDim || h > maxDim) {
-    const ratio = Math.min(maxDim / w, maxDim / h);
-    w = Math.round(w * ratio);
-    h = Math.round(h * ratio);
+
+  const targetBytes = 4 * 1024 * 1024;
+  let attemptMaxDim = maxDim;
+  let attemptQuality = quality;
+  let bestResult = dataUrl;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+    if (w > attemptMaxDim || h > attemptMaxDim) {
+      const ratio = Math.min(attemptMaxDim / w, attemptMaxDim / h);
+      w = Math.max(1, Math.round(w * ratio));
+      h = Math.max(1, Math.round(h * ratio));
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const candidates = [
+      canvas.toDataURL('image/jpeg', attemptQuality),
+      canvas.toDataURL('image/webp', attemptQuality),
+      canvas.toDataURL('image/png'),
+    ];
+    const smallestCandidate = pickSmallestDataUrl(candidates);
+    if (dataUrlByteLength(smallestCandidate) < dataUrlByteLength(bestResult)) {
+      bestResult = smallestCandidate;
+    }
+
+    if (dataUrlByteLength(bestResult) <= targetBytes) {
+      break;
+    }
+
+    attemptMaxDim = Math.max(960, Math.round(attemptMaxDim * 0.82));
+    attemptQuality = Math.max(0.55, attemptQuality - 0.1);
   }
-  const canvas = document.createElement('canvas');
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d')!;
-  ctx.drawImage(img, 0, 0, w, h);
-  const isPng = dataUrl.startsWith('data:image/png');
-  return canvas.toDataURL(isPng ? 'image/png' : 'image/jpeg', quality);
+
+  return bestResult;
 }
 
 async function normalizeMaskImage(dataUrl: string, width: number, height: number): Promise<string> {
@@ -2102,6 +2139,10 @@ export function ReferenceBoardCanvasPage() {
             onUpdate={(patch) => updateLayer(selectedLayer.id, patch)}
             onDelete={() => handleDeleteLayer(selectedLayer.id)}
             onDuplicate={() => handleDuplicateLayer(selectedLayer.id)}
+            onBringToFront={() => handleLayerOrder(selectedLayer.id, 'front')}
+            onBringForward={() => handleLayerOrder(selectedLayer.id, 'forward')}
+            onSendBackward={() => handleLayerOrder(selectedLayer.id, 'backward')}
+            onSendToBack={() => handleLayerOrder(selectedLayer.id, 'back')}
             onFlipH={selectedLayer.type === 'image' ? () => handleFlipH(selectedLayer.id) : undefined}
             onFlipV={selectedLayer.type === 'image' ? () => handleFlipV(selectedLayer.id) : undefined}
             onCropStart={selectedLayer.type === 'image' ? () => startCrop(selectedLayer.id) : undefined}
