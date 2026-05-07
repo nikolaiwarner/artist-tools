@@ -31,6 +31,8 @@ const MESSAGE_SYNC = 0;
 const MESSAGE_AWARENESS = 1;
 
 const docs = new Map();
+const persistenceTimers = new Map(); // Track debounce timers for each doc
+const PERSISTENCE_DEBOUNCE_MS = 5000; // Batch writes: persist every 5 seconds max
 
 function keyToYjsPath(rawKey) {
   const sanitized = rawKey.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -74,20 +76,37 @@ function getOrCreateDoc(key) {
     }
   }
 
+  // Debounce persistence: batch writes instead of per-update
+  function schedulePersistence() {
+    if (!persistPath) return;
+    
+    // Clear existing timer for this doc
+    const existingTimer = persistenceTimers.get(key);
+    if (existingTimer) clearTimeout(existingTimer);
+    
+    // Schedule new write
+    const timer = setTimeout(() => {
+      try {
+        const fullState = Y.encodeStateAsUpdate(doc);
+        fs.writeFileSync(persistPath, JSON.stringify({ updateBase64: bytesToBase64(fullState) }), 'utf8');
+        persistenceTimers.delete(key);
+      } catch (err) {
+        console.error(`Persistence failed for key ${key}:`, err);
+        persistenceTimers.delete(key);
+      }
+    }, PERSISTENCE_DEBOUNCE_MS);
+    
+    persistenceTimers.set(key, timer);
+  }
+
   doc.on('update', (update, origin) => {
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MESSAGE_SYNC);
     syncProtocol.writeUpdate(encoder, update);
     broadcast(docState, encoding.toUint8Array(encoder), origin);
 
-    if (persistPath) {
-      try {
-        const fullState = Y.encodeStateAsUpdate(doc);
-        fs.writeFileSync(persistPath, JSON.stringify({ updateBase64: bytesToBase64(fullState) }), 'utf8');
-      } catch {
-        // ignore persistence failures to keep realtime path alive
-      }
-    }
+    // Debounce persistence instead of writing on every update
+    schedulePersistence();
   });
 
   awareness.on('update', ({ added, updated, removed }, origin) => {
@@ -116,6 +135,24 @@ function closeConnection(docState, conn) {
   }
 
   if (docState.conns.size === 0) {
+    // Document is unused: flush any pending persistence and clean up
+    const timer = persistenceTimers.get(docState.key);
+    if (timer) {
+      clearTimeout(timer);
+      // Force immediate final write before cleanup
+      try {
+        const persistPath = keyToYjsPath(docState.key);
+        if (persistPath) {
+          const fullState = Y.encodeStateAsUpdate(docState.doc);
+          fs.writeFileSync(persistPath, JSON.stringify({ updateBase64: bytesToBase64(fullState) }), 'utf8');
+        }
+      } catch (err) {
+        console.error(`Final persistence failed for key ${docState.key}:`, err);
+      }
+      persistenceTimers.delete(docState.key);
+    }
+    // Destroy doc to free memory
+    docState.doc.destroy();
     docs.delete(docState.key);
   }
 }
@@ -199,10 +236,26 @@ function setupWSConnection(docState, conn) {
 // GET /health — simple liveness check
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
+// Optional: log memory usage periodically for debugging (set MEM_LOG_INTERVAL env var in minutes)
+if (process.env.MEM_LOG_INTERVAL) {
+  const intervalMinutes = parseInt(process.env.MEM_LOG_INTERVAL, 10);
+  if (!isNaN(intervalMinutes) && intervalMinutes > 0) {
+    setInterval(() => {
+      const mem = process.memoryUsage();
+      console.log(
+        `Memory: ${Math.round(mem.heapUsed / 1024 / 1024)}MB / ${Math.round(mem.heapTotal / 1024 / 1024)}MB heap, ` +
+        `RSS: ${Math.round(mem.rss / 1024 / 1024)}MB, Docs: ${docs.size}`
+      );
+    }, intervalMinutes * 60 * 1000);
+  }
+}
+
 const server = app.listen(PORT, () => {
   console.log(`Artist Tools sync server listening on port ${PORT}`);
   console.log(`Data directory: ${DATA_DIR}`);
   console.log('Press Ctrl+C to stop.');
+  console.log(`Persistence debounce: ${PERSISTENCE_DEBOUNCE_MS}ms (batches writes)`);
+  console.log('Set MEM_LOG_INTERVAL env var (minutes) to enable periodic memory logging');
 });
 
 const wss = new WebSocketServer({ noServer: true });
