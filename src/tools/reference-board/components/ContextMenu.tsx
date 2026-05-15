@@ -4,6 +4,9 @@ interface ContextMenuProps {
   x: number;
   y: number;
   onClose: () => void;
+  ariaLabel?: string;
+  onAddText?: () => void;
+  onAddImage?: () => void;
   onDelete?: () => void;
   onDuplicate?: () => void;
   onCopy?: () => void;
@@ -20,6 +23,9 @@ export function ContextMenu({
   x,
   y,
   onClose,
+  ariaLabel = 'Layer actions',
+  onAddText,
+  onAddImage,
   onDelete,
   onDuplicate,
   onCopy,
@@ -71,8 +77,13 @@ export function ContextMenu({
       className="refboard-context-menu"
       style={{ left: x, top: y }}
       role="menu"
-      aria-label="Layer actions"
+      aria-label={ariaLabel}
     >
+      {onAddText && item('Add Text', onAddText)}
+      {onAddImage && item('Add Image', onAddImage)}
+      {(onAddText || onAddImage) && (onCopy || onDuplicate || onPaste || onCropStart || onBringToFront || onSendToBack || onBringForward || onSendBackward || onDelete) && (
+        <div className="refboard-ctx-divider" />
+      )}
       {onCopy && item('Copy', onCopy)}
       {onDuplicate && item('Duplicate', onDuplicate)}
       {onPaste && item('Paste', onPaste)}

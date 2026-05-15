@@ -50,6 +50,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Layer Selection**: Tap to select a layer; tap empty canvas to deselect
 - **Layer Context Menu**: Long-press (hold for 500ms) on a layer to open the context menu with layer actions
 - **Right-click menu**: On desktop, right-click a layer to open the context menu; on mobile/touch devices, use long-press
+- **Canvas Context Menu**: Right-click empty canvas space (or long-press on touch) to open canvas actions for `Add Text`, `Add Image`, and `Paste`
 - **Layer Panel**: Appears as a bottom drawer on mobile devices when a layer is selected, allowing full editing of layer properties
 - **Touch Targets**: All buttons are optimized for touch with 44×44px minimum size on mobile
 
@@ -93,7 +94,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Desktop**: Right-click (or long press on touch) opens context menu: Bring to Front, Bring Forward, Send Backward, Send to Back
 - **Mobile**: Long-press (hold 500ms) on a layer to open context menu with the same layer ordering options
 - Context menu also provides Copy, Delete, and Duplicate
-- Right-clicking empty canvas space shows a Paste option (when layers have been copied)
+- Right-clicking empty canvas space shows a canvas context menu with `Add Text`, `Add Image`, and `Paste`
 - Layer panel provides duplicate (copy icon), delete (trash icon), and ordering buttons (Top/Up/Down/Bottom)
 
 ### Mobile-First Experience
@@ -104,7 +105,8 @@ Reference Board is designed with first-class support for both desktop and mobile
 - **Pinch Zoom**: Two-finger pinch gesture to zoom in/out with smooth scaling
 - **Two-Finger Pan**: Move around the canvas by dragging with two fingers
 - **Single-Finger Drag**: Move layers around the canvas
-- **Long-Press**: Hold on a layer for 500ms to open the context menu (replaces right-click on touch devices)
+- **Long-Press**: Hold on a layer for 500ms to open the layer context menu (replaces right-click on touch devices)
+- **Canvas Long-Press**: Hold on empty canvas space for 500ms to open the canvas context menu (`Add Text`, `Add Image`, `Paste`)
 - **Double-Tap**: Double-tap text layers to edit them
 
 ### Mobile UI Adaptations

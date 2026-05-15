@@ -18,6 +18,7 @@
 - **Reference Board** selected-layer settings panel now includes layer ordering controls (front/forward/backward/back).
 - **Reference Board** import/paste/camera image additions now auto-optimize image payload size client-side (downscale + smallest format selection) before IndexedDB/sync writes.
 - **Reference Board** image layers now support per-layer tonal controls (Black and White toggle + posterize levels 2-6).
+- **Reference Board** empty-canvas context menu now shows add actions (`Add Text`, `Add Image`) and `Paste`, with long-press support on mobile.
 - The app is intended for GitHub Pages deployment.
 - Routing uses a hash router so tool pages work on static hosting.
 - The shared UI theme is intentionally barebones and compact to maximize visible tool workspace.
@@ -74,7 +75,7 @@
 - `src/tools/reference-board/ReferenceBoardCanvasPage.tsx`: canvas editor (react-konva stage, image/text layers, transforms)
 - Reference Board layer copy/paste uses the system clipboard and supports cross-project pastes with image/mask asset ID remapping for per-project uniqueness
 - `src/tools/reference-board/components/CanvasStage.tsx`: Konva Stage with pan/zoom + zoom controls
-- `src/tools/reference-board/components/ContextMenu.tsx`: right-click layer actions menu
+- `src/tools/reference-board/components/ContextMenu.tsx`: layer + empty-canvas context actions menu
 - `src/tools/reference-board/components/LayerPanel.tsx`: selected layer properties sidebar
 - `src/tools/reference-board/components/TextEditor.tsx`: HTML textarea overlay for text layer editing
 - `src/tools/reference-board/*.test.ts*`: reference board logic, send-integration helpers, and page behavior tests

@@ -897,6 +897,8 @@ export function ReferenceBoardCanvasPage() {
   const copiedLayersRef = useRef<CanvasLayer[]>([]);
   const layersRef = useRef<CanvasLayer[]>([]);
   const historyManagerRef = useRef(new UndoRedoManager());
+  const canvasLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canvasLongPressStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const [layers, setLayers] = useState<CanvasLayer[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -1774,6 +1776,10 @@ export function ReferenceBoardCanvasPage() {
     if (e.dataTransfer.files.length > 0) void importFiles(e.dataTransfer.files);
   }
 
+  function openImagePicker() {
+    fileInputRef.current?.click();
+  }
+
   // ── Add text ──────────────────────────────────────────────────────────────
 
   function handleAddText() {
@@ -1854,10 +1860,75 @@ export function ReferenceBoardCanvasPage() {
 
   function handleCanvasContextMenu(e: React.MouseEvent) {
     e.preventDefault();
-    if (copiedLayersRef.current.length === 0) return;
+    if (canvasLongPressTimerRef.current) {
+      clearTimeout(canvasLongPressTimerRef.current);
+      canvasLongPressTimerRef.current = null;
+    }
     setContextMenu(null);
     setCanvasContextMenu({ x: e.clientX, y: e.clientY });
   }
+
+  function openCanvasContextMenuAt(clientX: number, clientY: number) {
+    setContextMenu(null);
+    setCanvasContextMenu({ x: clientX, y: clientY });
+  }
+
+  function handleCanvasTouchStart(e: React.TouchEvent<HTMLDivElement>) {
+    if (e.touches.length !== 1) return;
+
+    const touch = e.touches[0];
+    const stage = stageRef.current;
+    const stageContainer = stage?.container();
+
+    if (stage && stageContainer) {
+      const rect = stageContainer.getBoundingClientRect();
+      const stagePoint = {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+      const hitShape = stage.getIntersection(stagePoint);
+      if (hitShape) {
+        return;
+      }
+    }
+
+    canvasLongPressStartRef.current = { x: touch.clientX, y: touch.clientY };
+    if (canvasLongPressTimerRef.current) {
+      clearTimeout(canvasLongPressTimerRef.current);
+    }
+    canvasLongPressTimerRef.current = setTimeout(() => {
+      openCanvasContextMenuAt(touch.clientX, touch.clientY);
+      canvasLongPressTimerRef.current = null;
+      canvasLongPressStartRef.current = null;
+    }, 500);
+  }
+
+  function clearCanvasLongPressTimer() {
+    if (canvasLongPressTimerRef.current) {
+      clearTimeout(canvasLongPressTimerRef.current);
+      canvasLongPressTimerRef.current = null;
+    }
+    canvasLongPressStartRef.current = null;
+  }
+
+  function handleCanvasTouchMove(e: React.TouchEvent<HTMLDivElement>) {
+    if (!canvasLongPressTimerRef.current || e.touches.length !== 1 || !canvasLongPressStartRef.current) return;
+
+    const touch = e.touches[0];
+    const dx = Math.abs(touch.clientX - canvasLongPressStartRef.current.x);
+    const dy = Math.abs(touch.clientY - canvasLongPressStartRef.current.y);
+    if (dx > 8 || dy > 8) {
+      clearCanvasLongPressTimer();
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (canvasLongPressTimerRef.current) {
+        clearTimeout(canvasLongPressTimerRef.current);
+      }
+    };
+  }, []);
 
   // ── Box select handlers ────────────────────────────────────────────────────
 
@@ -2037,7 +2108,7 @@ export function ReferenceBoardCanvasPage() {
             />
           </label>
           <label className="refboard-toolbar-btn" title="Import images">
-            <ImagePlus size={16} />
+            <ImagePlus size={16} onClick={openImagePicker} />
             <input
               ref={fileInputRef}
               type="file"
@@ -2081,6 +2152,10 @@ export function ReferenceBoardCanvasPage() {
             backgroundPosition: `${viewport.x}px ${viewport.y}px`,
           }}
           onContextMenu={handleCanvasContextMenu}
+          onTouchStart={handleCanvasTouchStart}
+          onTouchMove={handleCanvasTouchMove}
+          onTouchEnd={clearCanvasLongPressTimer}
+          onTouchCancel={clearCanvasLongPressTimer}
         >
           {loading && <div className="refboard-loading">Loading…</div>}
           <CanvasStage
@@ -2287,6 +2362,9 @@ export function ReferenceBoardCanvasPage() {
           x={canvasContextMenu.x}
           y={canvasContextMenu.y}
           onClose={() => setCanvasContextMenu(null)}
+          ariaLabel="Canvas actions"
+          onAddText={handleAddText}
+          onAddImage={openImagePicker}
           onPaste={() => void handlePasteLayers(copiedLayersRef.current, copiedLayersRef.current[0]?.projectId)}
         />
       )}

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { ReferenceBoardCanvasPage } from './ReferenceBoardCanvasPage';
 import {
@@ -1355,6 +1355,37 @@ describe('ReferenceBoardCanvasPage', () => {
 
     const pasteButton = await screen.findByText('Paste');
     expect(pasteButton).toBeInTheDocument();
+  });
+
+  it('shows Add Text, Add Image, and Paste options in canvas context menu', async () => {
+    renderCanvas();
+
+    const canvasWrap = await screen.findByTestId('canvas-wrap');
+    fireEvent.contextMenu(canvasWrap);
+
+    expect(await screen.findByText('Add Text')).toBeInTheDocument();
+    expect(await screen.findByText('Add Image')).toBeInTheDocument();
+    expect(await screen.findByText('Paste')).toBeInTheDocument();
+  });
+
+  it('opens the canvas context menu on mobile long press', () => {
+    vi.useFakeTimers();
+    renderCanvas();
+
+    const canvasWrap = screen.getByTestId('canvas-wrap');
+    fireEvent.touchStart(canvasWrap, {
+      touches: [{ clientX: 160, clientY: 220 }],
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(550);
+    });
+
+    expect(screen.getByText('Add Text')).toBeInTheDocument();
+    expect(screen.getByText('Add Image')).toBeInTheDocument();
+    expect(screen.getByText('Paste')).toBeInTheDocument();
+
+    vi.useRealTimers();
   });
 
   it('adds a pasted clipboard image as a new image layer', async () => {

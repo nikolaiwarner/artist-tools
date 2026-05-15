@@ -151,6 +151,7 @@ Key features:
 - Text layers with font, size, bold/italic, color, and alignment controls
 - Box layers for composition guides with resizable rectangle bounds plus stroke/fill controls
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
+- Empty-canvas context menu: right-click (desktop) or long-press (mobile) opens `Add Text`, `Add Image`, and `Paste`
 - Selected-layer panel buttons for ordering (front/forward/backward/back) in addition to duplicate/delete controls
 - Ctrl/Cmd+C and Ctrl/Cmd+V layer copy/paste uses the system clipboard, including cross-project paste
 - Cross-project pastes duplicate image/mask assets with new IDs so asset identities stay unique between projects
