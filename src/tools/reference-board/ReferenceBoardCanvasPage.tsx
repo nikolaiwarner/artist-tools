@@ -188,6 +188,10 @@ export function stageToWorldPoint(point: { x: number; y: number }, viewport: Vie
   };
 }
 
+function areViewportsEqual(left: Viewport, right: Viewport): boolean {
+  return left.x === right.x && left.y === right.y && left.scale === right.scale;
+}
+
 function getLayerBounds(layer: CanvasLayer): BoundsRect {
   if (layer.type === 'image') {
     const width = (layer.crop ? layer.crop.width * layer.width : layer.width) * Math.abs(layer.scaleX);
@@ -891,11 +895,12 @@ export function ReferenceBoardCanvasPage() {
   const transformerRef = useRef<Konva.Transformer>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const viewportSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dbMutationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const scheduleThumbnailRef = useRef<() => void>(() => undefined);
   const copiedLayersRef = useRef<CanvasLayer[]>([]);
   const layersRef = useRef<CanvasLayer[]>([]);
+  const viewportRef = useRef<Viewport>({ x: 0, y: 0, scale: 1 });
+  const lastPersistedViewportRef = useRef<Viewport>({ x: 0, y: 0, scale: 1 });
   const historyManagerRef = useRef(new UndoRedoManager());
   const canvasLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasLongPressStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -906,6 +911,9 @@ export function ReferenceBoardCanvasPage() {
   // Keep a ref in sync so scheduleThumbnail can read current layers without being a dependency
   useEffect(() => { layersRef.current = layers; }, [layers]);
   const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, scale: 1 });
+  useEffect(() => {
+    viewportRef.current = viewport;
+  }, [viewport]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
@@ -928,6 +936,13 @@ export function ReferenceBoardCanvasPage() {
 
   const project = useMemo(() => (projectId ? getProject(projectId) : null), [projectId]);
 
+  const persistViewport = useCallback((nextViewport: Viewport) => {
+    if (!projectId) return;
+    if (areViewportsEqual(lastPersistedViewportRef.current, nextViewport)) return;
+    updateViewport(projectId, nextViewport);
+    lastPersistedViewportRef.current = nextViewport;
+  }, [projectId]);
+
   const reloadProjectMeta = useCallback(() => {
     if (!projectId) return;
     const nextProject = getProject(projectId);
@@ -936,6 +951,8 @@ export function ReferenceBoardCanvasPage() {
       return;
     }
     setViewport(nextProject.viewport);
+    viewportRef.current = nextProject.viewport;
+    lastPersistedViewportRef.current = nextProject.viewport;
     setCanvasBackgroundColor(nextProject.canvasBackgroundColor ?? DEFAULT_CANVAS_BACKGROUND_COLOR);
   }, [navigate, projectId]);
 
@@ -1077,18 +1094,17 @@ export function ReferenceBoardCanvasPage() {
     setCanRedo(history.canRedo());
   }, [imageCache, layers, persistHistoryTransition]);
 
-  // Debounced viewport save
+  // Keep viewport updates local during gestures; persist on explicit interaction commit.
   const handleViewportChange = useCallback(
     (vp: Viewport) => {
       setViewport(vp);
-      if (!projectId) return;
-      if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
-      viewportSaveTimerRef.current = setTimeout(() => {
-        updateViewport(projectId, vp);
-      }, 500);
     },
-    [projectId]
+    []
   );
+
+  const handleViewportCommit = useCallback((vp: Viewport) => {
+    persistViewport(vp);
+  }, [persistViewport]);
 
   const captureThumbnailNow = useCallback(() => {
     if (!projectId) return;
@@ -1163,9 +1179,16 @@ export function ReferenceBoardCanvasPage() {
       clearTimeout(thumbnailTimerRef.current);
       thumbnailTimerRef.current = null;
     }
+    persistViewport(viewportRef.current);
     captureThumbnailNow();
     navigate('/tools/reference-board');
-  }, [captureThumbnailNow, navigate]);
+  }, [captureThumbnailNow, navigate, persistViewport]);
+
+  useEffect(() => {
+    return () => {
+      persistViewport(viewportRef.current);
+    };
+  }, [persistViewport]);
 
   useEffect(() => {
     scheduleThumbnailRef.current = scheduleThumbnail;
@@ -2161,6 +2184,7 @@ export function ReferenceBoardCanvasPage() {
           <CanvasStage
             viewport={viewport}
             onViewportChange={handleViewportChange}
+            onViewportCommit={handleViewportCommit}
             stageRef={stageRef}
             selectionBox={selectionBox}
             onSelectionStart={handleSelectionStart}

@@ -12,7 +12,7 @@ import {
   saveLayer,
 } from './db';
 import { generateMaskDataUrlFromImage } from './backgroundMask';
-import { updateProject, updateThumbnail } from './referenceBoard';
+import { updateProject, updateThumbnail, updateViewport } from './referenceBoard';
 
 const canvasStageMocks = vi.hoisted(() => {
   const fakeStage = {
@@ -58,10 +58,12 @@ const canvasStageMocks = vi.hoisted(() => {
 });
 
 vi.mock('./components/CanvasStage', () => ({
-  CanvasStage: ({ children, stageRef, onBackgroundClick }: {
+  CanvasStage: ({ children, stageRef, onBackgroundClick, onViewportChange, onViewportCommit }: {
     children?: React.ReactNode;
     stageRef?: { current: unknown };
     onBackgroundClick?: () => void;
+    onViewportChange?: (viewport: { x: number; y: number; scale: number }) => void;
+    onViewportCommit?: (viewport: { x: number; y: number; scale: number }) => void;
   }) => {
     if (stageRef && canvasStageMocks.attachStageRef) {
       stageRef.current = canvasStageMocks.fakeStage as never;
@@ -69,6 +71,20 @@ vi.mock('./components/CanvasStage', () => ({
 
     return (
       <div data-testid="konva-stage" onClick={onBackgroundClick}>
+        <button
+          type="button"
+          data-testid="viewport-change"
+          onClick={() => onViewportChange?.({ x: 101, y: 202, scale: 1.25 })}
+        >
+          viewport-change
+        </button>
+        <button
+          type="button"
+          data-testid="viewport-commit"
+          onClick={() => onViewportCommit?.({ x: 101, y: 202, scale: 1.25 })}
+        >
+          viewport-commit
+        </button>
         {children}
       </div>
     );
@@ -298,6 +314,17 @@ describe('ReferenceBoardCanvasPage', () => {
     renderCanvas();
     expect(await screen.findByTestId('konva-stage')).toBeInTheDocument();
   });
+
+  it('persists viewport only on viewport commit', async () => {
+    renderCanvas();
+
+    fireEvent.click(await screen.findByTestId('viewport-change'));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(updateViewport).not.toHaveBeenCalled();
+
+    fireEvent.click(await screen.findByTestId('viewport-commit'));
+    expect(updateViewport).toHaveBeenCalledWith('proj-1', { x: 101, y: 202, scale: 1.25 });
+  }, 10000);
 
   it('adds a box layer and persists it', async () => {
     renderCanvas();

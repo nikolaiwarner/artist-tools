@@ -22,6 +22,7 @@ const LOCAL_STORAGE_PREFIX = 'artist-tools.';
 // Exclude sync settings from the snapshot so they're device-local.
 // This intentionally covers both the current key and legacy variants like artist-tools.sync.settings.
 const EXCLUDED_PREFIXES = ['artist-tools.sync'];
+const REFERENCE_BOARD_PROJECTS_STORAGE_KEY = 'artist-tools.reference-board.projects';
 const DB_CHANGE_EVENT = 'artist-tools:reference-board-db-change';
 export const SYNC_APPLIED_EVENT = 'artist-tools:sync-applied';
 const BACKUP_FORMAT = 'artist-tools-backup';
@@ -76,6 +77,77 @@ function notifySubscribers(): void {
 
 function isExcludedKey(key: string): boolean {
   return EXCLUDED_PREFIXES.some((prefix) => key === prefix || key.startsWith(`${prefix}.`));
+}
+
+function stripReferenceBoardProjectThumbnails(rawProjectsValue: string): string {
+  try {
+    const parsed = JSON.parse(rawProjectsValue) as unknown;
+    if (!Array.isArray(parsed)) return rawProjectsValue;
+
+    let removedAnyThumbnail = false;
+    const sanitized = parsed.map((project) => {
+      if (!isRecord(project) || !('thumbnailDataUrl' in project)) {
+        return project;
+      }
+
+      removedAnyThumbnail = true;
+      const { thumbnailDataUrl: _ignored, ...rest } = project;
+      return rest;
+    });
+
+    return removedAnyThumbnail ? JSON.stringify(sanitized) : rawProjectsValue;
+  } catch {
+    return rawProjectsValue;
+  }
+}
+
+function mergeLocalReferenceBoardProjectThumbnails(remoteProjectsValue: string): string {
+  const localRawProjectsValue = localStorage.getItem(REFERENCE_BOARD_PROJECTS_STORAGE_KEY);
+  if (!localRawProjectsValue) return remoteProjectsValue;
+
+  try {
+    const remoteParsed = JSON.parse(remoteProjectsValue) as unknown;
+    const localParsed = JSON.parse(localRawProjectsValue) as unknown;
+    if (!Array.isArray(remoteParsed) || !Array.isArray(localParsed)) {
+      return remoteProjectsValue;
+    }
+
+    const localThumbnails = new Map<string, string>();
+    for (const localProject of localParsed) {
+      if (!isRecord(localProject)) continue;
+      const projectId = localProject.id;
+      const thumbnailDataUrl = localProject.thumbnailDataUrl;
+      if (typeof projectId === 'string' && typeof thumbnailDataUrl === 'string') {
+        localThumbnails.set(projectId, thumbnailDataUrl);
+      }
+    }
+
+    if (localThumbnails.size === 0) {
+      return remoteProjectsValue;
+    }
+
+    let mergedAnyThumbnail = false;
+    const merged = remoteParsed.map((remoteProject) => {
+      if (!isRecord(remoteProject) || typeof remoteProject.id !== 'string') {
+        return remoteProject;
+      }
+      if (typeof remoteProject.thumbnailDataUrl === 'string') {
+        return remoteProject;
+      }
+
+      const localThumbnail = localThumbnails.get(remoteProject.id);
+      if (!localThumbnail) {
+        return remoteProject;
+      }
+
+      mergedAnyThumbnail = true;
+      return { ...remoteProject, thumbnailDataUrl: localThumbnail };
+    });
+
+    return mergedAnyThumbnail ? JSON.stringify(merged) : remoteProjectsValue;
+  } catch {
+    return remoteProjectsValue;
+  }
 }
 
 function attachEventListeners(): void {
@@ -258,7 +330,11 @@ export async function collectAllEntries(options: CollectAllEntriesOptions = {}):
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key && key.startsWith(LOCAL_STORAGE_PREFIX) && !isExcludedKey(key)) {
-      entries.set(`${GRANULAR_LS_PREFIX}${key}`, localStorage.getItem(key) ?? '');
+      let value = localStorage.getItem(key) ?? '';
+      if (key === REFERENCE_BOARD_PROJECTS_STORAGE_KEY) {
+        value = stripReferenceBoardProjectThumbnails(value);
+      }
+      entries.set(`${GRANULAR_LS_PREFIX}${key}`, value);
     }
   }
 
@@ -299,7 +375,10 @@ export async function applyEntry(yjsKey: string, value: string | null): Promise<
     if (value === null) {
       localStorage.removeItem(lsKey);
     } else {
-      localStorage.setItem(lsKey, value);
+      const nextValue = lsKey === REFERENCE_BOARD_PROJECTS_STORAGE_KEY
+        ? mergeLocalReferenceBoardProjectThumbnails(value)
+        : value;
+      localStorage.setItem(lsKey, nextValue);
     }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent<SyncAppliedDetail>(SYNC_APPLIED_EVENT, {

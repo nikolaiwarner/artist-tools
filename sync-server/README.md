@@ -33,6 +33,10 @@ The server runs on port **3579** by default.
 |------------|----------------------|----------------------------------|
 | `PORT`     | `3579`               | TCP port to listen on            |
 | `DATA_DIR` | `./data` (next to server.js) | Directory where Yjs room state is stored |
+| `WS_PERMESSAGE_DEFLATE` | `true` | Enable WebSocket per-message compression (`false` disables) |
+| `WS_COMPRESSION_THRESHOLD` | `2048` | Compress outbound frames at/above this byte size |
+| `MEM_LOG_INTERVAL` | _(unset)_ | Minutes between memory usage log lines |
+| `METRICS_LOG_INTERVAL` | _(unset)_ | Minutes between sync traffic metrics log lines |
 
 ### Example with custom port
 
@@ -74,3 +78,9 @@ Realtime transport details:
 - WebSocket endpoint: `/yjs-ws/:key`
 - Protocol: Yjs sync protocol (`y-protocols/sync` + `y-protocols/awareness`)
 - Persistence: server writes merged Yjs doc state to `data/<key>.yjs.json`
+
+## Monitoring
+
+- `GET /health` returns basic liveness.
+- `GET /stats` returns cumulative inbound/outbound bytes/messages plus per-room activity and persistence counters.
+- Set `METRICS_LOG_INTERVAL` (minutes) to print periodic bandwidth summaries to stdout.

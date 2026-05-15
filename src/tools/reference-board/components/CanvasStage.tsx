@@ -6,6 +6,7 @@ import type { Viewport } from '../types';
 interface CanvasStageProps {
   viewport: Viewport;
   onViewportChange: (viewport: Viewport) => void;
+  onViewportCommit?: (viewport: Viewport) => void;
   children?: React.ReactNode;
   stageRef?: React.RefObject<Konva.Stage | null>;
   onBackgroundClick?: () => void;
@@ -38,6 +39,7 @@ function getTouchCenter(touches: React.TouchList): { x: number; y: number } {
 export function CanvasStage({
   viewport,
   onViewportChange,
+  onViewportCommit,
   children,
   stageRef: externalStageRef,
   onBackgroundClick,
@@ -56,6 +58,30 @@ export function CanvasStage({
   // Touch gesture tracking
   const touchesRef = useRef<React.TouchList | null>(null);
   const lastTouchDistanceRef = useRef(0);
+  const viewportRef = useRef(viewport);
+  const wheelCommitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchViewportChangedRef = useRef(false);
+
+  const emitViewportChange = useCallback((nextViewport: Viewport) => {
+    viewportRef.current = nextViewport;
+    onViewportChange(nextViewport);
+  }, [onViewportChange]);
+
+  const emitViewportCommit = useCallback((nextViewport?: Viewport) => {
+    onViewportCommit?.(nextViewport ?? viewportRef.current);
+  }, [onViewportCommit]);
+
+  useEffect(() => {
+    viewportRef.current = viewport;
+  }, [viewport]);
+
+  useEffect(() => {
+    return () => {
+      if (wheelCommitTimerRef.current) {
+        clearTimeout(wheelCommitTimerRef.current);
+      }
+    };
+  }, []);
 
   // Wheel zoom (ctrl/cmd + scroll or trackpad pinch)
   const handleWheel = useCallback(
@@ -84,17 +110,24 @@ export function CanvasStage({
           y: pointer.y - mousePointTo.y * newScale,
         };
 
-        onViewportChange({ x: newPos.x, y: newPos.y, scale: newScale });
+        emitViewportChange({ x: newPos.x, y: newPos.y, scale: newScale });
       } else {
         // Pan with scroll
-        onViewportChange({
+        emitViewportChange({
           x: viewport.x - e.evt.deltaX,
           y: viewport.y - e.evt.deltaY,
           scale: viewport.scale,
         });
       }
+
+      if (wheelCommitTimerRef.current) {
+        clearTimeout(wheelCommitTimerRef.current);
+      }
+      wheelCommitTimerRef.current = setTimeout(() => {
+        emitViewportCommit();
+      }, 250);
     },
-    [viewport, onViewportChange, stageRef]
+    [viewport, emitViewportChange, emitViewportCommit, stageRef]
   );
 
   // Middle mouse / space+drag panning, or box select on empty canvas
@@ -128,7 +161,7 @@ export function CanvasStage({
         const dx = e.evt.clientX - lastPosRef.current.x;
         const dy = e.evt.clientY - lastPosRef.current.y;
         lastPosRef.current = { x: e.evt.clientX, y: e.evt.clientY };
-        onViewportChange({ x: viewport.x + dx, y: viewport.y + dy, scale: viewport.scale });
+        emitViewportChange({ x: viewport.x + dx, y: viewport.y + dy, scale: viewport.scale });
       } else if (selectionBox) {
         const pointer = stage.getPointerPosition();
         if (pointer) {
@@ -136,16 +169,20 @@ export function CanvasStage({
         }
       }
     },
-    [viewport, onViewportChange, selectionBox, onSelectionMove]
+    [viewport, emitViewportChange, selectionBox, onSelectionMove]
   );
 
   const handleMouseUp = useCallback(() => {
+    const wasPanning = isPanningRef.current;
     isPanningRef.current = false;
     if (containerRef.current) {
       containerRef.current.style.cursor = spaceDownRef.current ? 'grab' : 'default';
     }
+    if (wasPanning) {
+      emitViewportCommit();
+    }
     onSelectionEnd?.();
-  }, [onSelectionEnd]);
+  }, [emitViewportCommit, onSelectionEnd]);
 
   // Touch gesture handlers for mobile pinch-zoom and pan
   const handleTouchStart = useCallback(
@@ -211,7 +248,8 @@ export function CanvasStage({
               y: pointerPos.y - mousePointTo.y * newScale,
             };
 
-            onViewportChange({ x: newPos.x, y: newPos.y, scale: newScale });
+            emitViewportChange({ x: newPos.x, y: newPos.y, scale: newScale });
+            touchViewportChangedRef.current = true;
             lastTouchDistanceRef.current = currentDistance;
           }
         } else {
@@ -219,23 +257,29 @@ export function CanvasStage({
           const dx = currentCenter.x - lastPosRef.current.x;
           const dy = currentCenter.y - lastPosRef.current.y;
           if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
-            onViewportChange({
+            emitViewportChange({
               x: viewport.x + dx,
               y: viewport.y + dy,
               scale: viewport.scale,
             });
+            touchViewportChangedRef.current = true;
             lastPosRef.current = currentCenter;
           }
         }
       }
     },
-    [viewport, onViewportChange, stageRef]
+    [viewport, emitViewportChange, stageRef]
   );
 
-  const handleTouchEnd = useCallback(() => {
-    touchesRef.current = null;
+  const handleTouchEnd = useCallback((e: React.TouchEvent<HTMLDivElement>) => {
+    const shouldCommitViewport = touchViewportChangedRef.current && e.touches.length < 2;
+    touchesRef.current = e.touches;
     lastTouchDistanceRef.current = 0;
-  }, []);
+    if (shouldCommitViewport) {
+      touchViewportChangedRef.current = false;
+      emitViewportCommit();
+    }
+  }, [emitViewportCommit]);
 
   // Space key for pan mode
   useEffect(() => {
@@ -270,7 +314,9 @@ export function CanvasStage({
     const container = stage.container();
     const w = container.clientWidth;
     const h = container.clientHeight;
-    onViewportChange({ x: w / 2, y: h / 2, scale: 1 });
+    const nextViewport = { x: w / 2, y: h / 2, scale: 1 };
+    emitViewportChange(nextViewport);
+    emitViewportCommit(nextViewport);
   }
 
   return (

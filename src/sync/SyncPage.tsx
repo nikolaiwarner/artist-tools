@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type ChangeEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, type ChangeEvent } from 'react';
 import { AppMenuButton } from '../components/AppMenuButton';
 import type { SyncSettings } from './syncTypes';
 import {
@@ -15,6 +15,21 @@ import {
   restoreSnapshot,
 } from './syncData';
 
+interface ServerStats {
+  startedAt: number;
+  uptimeMs: number;
+  activeDocs: number;
+  roomsTracked: number;
+  metrics: {
+    inboundBytes: number;
+    outboundBytes: number;
+    inboundMessages: number;
+    outboundMessages: number;
+  };
+}
+
+const STATS_AUTO_REFRESH_INTERVAL_MS = 30_000;
+
 function loadSettings(): SyncSettings {
   return getSyncSettingsFromStorage();
 }
@@ -23,13 +38,35 @@ function saveSettings(settings: SyncSettings): void {
   saveSyncSettingsToStorage(settings);
 }
 
+function buildStatsUrl(serverUrl: string): string {
+  return `${serverUrl.replace(/\/$/, '')}/stats`;
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  return index === 0 ? `${Math.round(value)} ${units[index]}` : `${value.toFixed(2)} ${units[index]}`;
+}
+
 export function SyncPage() {
   const [settings, setSettings] = useState<SyncSettings>(loadSettings);
   const [draftSettings, setDraftSettings] = useState<SyncSettings>(settings);
   const [runtimeState, setRuntimeState] = useState(getSyncRuntimeState());
   const [backupStatus, setBackupStatus] = useState<string>('');
   const [backupError, setBackupError] = useState<string>('');
+  const [stats, setStats] = useState<ServerStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState('');
+  const [statsUpdatedAt, setStatsUpdatedAt] = useState<number | null>(null);
+  const [statsAutoRefresh, setStatsAutoRefresh] = useState(false);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const statsRequestInFlightRef = useRef(false);
 
   useEffect(() => {
     saveSettings(settings);
@@ -50,6 +87,56 @@ export function SyncPage() {
     setSettings(nextSettings);
     applySyncSettings(nextSettings);
   }
+
+  const refreshServerStats = useCallback(async () => {
+    if (statsRequestInFlightRef.current) return;
+
+    const serverUrl = settings.serverUrl.trim();
+    if (!serverUrl) {
+      setStatsError('Set a server URL and click Save and connect first.');
+      return;
+    }
+
+    if (typeof fetch !== 'function') {
+      setStatsError('This browser environment does not support fetch().');
+      return;
+    }
+
+    setStatsLoading(true);
+    setStatsError('');
+    statsRequestInFlightRef.current = true;
+
+    try {
+      const response = await fetch(buildStatsUrl(serverUrl));
+      if (!response.ok) {
+        throw new Error(`Server responded ${response.status} ${response.statusText}`.trim());
+      }
+
+      const nextStats = await response.json() as ServerStats;
+      setStats(nextStats);
+      setStatsUpdatedAt(Date.now());
+    } catch (error) {
+      setStatsError(error instanceof Error ? error.message : 'Failed to fetch server stats.');
+    } finally {
+      statsRequestInFlightRef.current = false;
+      setStatsLoading(false);
+    }
+  }, [settings.serverUrl]);
+
+  useEffect(() => {
+    if (!statsAutoRefresh) return;
+    if (!settings.serverUrl.trim()) return;
+    if (runtimeState.connectionStatus === 'disconnected') return;
+
+    void refreshServerStats();
+    const intervalId = setInterval(() => {
+      void refreshServerStats();
+    }, STATS_AUTO_REFRESH_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+    };
+  }, [statsAutoRefresh, settings.serverUrl, runtimeState.connectionStatus, refreshServerStats]);
 
   async function exportBackup() {
     try {
@@ -165,6 +252,50 @@ export function SyncPage() {
           >
             {runtimeState.connectionStatus.toUpperCase()} - {runtimeState.statusMessage}
           </p>
+        </section>
+
+        <section className="tool-card sync-section">
+          <h2>Server stats</h2>
+          <p className="sync-description">
+            Pull a live traffic snapshot from your sync server&apos;s <code>/stats</code> endpoint.
+          </p>
+          <div className="sync-actions-row">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => void refreshServerStats()}
+              disabled={statsLoading}
+            >
+              {statsLoading ? 'Refreshing…' : 'Refresh server stats'}
+            </button>
+          </div>
+          <label className="field-label" htmlFor="stats-auto-refresh">
+            <input
+              id="stats-auto-refresh"
+              type="checkbox"
+              checked={statsAutoRefresh}
+              onChange={(event) => setStatsAutoRefresh(event.target.checked)}
+              disabled={!settings.serverUrl.trim()}
+            />
+            {' '}Auto refresh server stats every 30s
+          </label>
+          {!settings.serverUrl.trim() ? (
+            <p className="field-hint">Set a server URL and click Save and connect to enable stats refresh.</p>
+          ) : null}
+          {statsError ? <p className="sync-status error">{statsError}</p> : null}
+          {stats ? (
+            <div>
+              <p>Outbound: {formatBytes(stats.metrics.outboundBytes)}</p>
+              <p>Inbound: {formatBytes(stats.metrics.inboundBytes)}</p>
+              <p>Outbound messages: {stats.metrics.outboundMessages}</p>
+              <p>Inbound messages: {stats.metrics.inboundMessages}</p>
+              <p>Active docs: {stats.activeDocs}</p>
+              <p>Rooms tracked: {stats.roomsTracked}</p>
+              {statsUpdatedAt ? (
+                <p className="field-hint">Last refreshed at {new Date(statsUpdatedAt).toLocaleTimeString()}.</p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
 
         <section className="tool-card sync-section">

@@ -170,9 +170,14 @@ Key behaviors:
 - Posterize Viewer syncs the shared study controls (`renderMode`, active stage, camera facing preference)
 - Initial connect is remote-first: if remote state exists, it is applied to the client
 - Sync settings remain local to each device; any localStorage key under `artist-tools.sync*` is excluded from synced content
+- Reference Board project thumbnails are treated as local-only display cache during sync: outbound project metadata strips `thumbnailDataUrl`, and inbound project metadata preserves each device's existing local thumbnails by project id
+- Reference Board viewport persistence now writes on interaction commit (pan/zoom end) instead of per movement tick, reducing repetitive localStorage and sync churn during navigation
 - Reference Board image data syncs fully, including large images, by splitting oversized image payloads into smaller Yjs chunk entries to avoid large single-entry websocket/state spikes
 - Remote restore is non-destructive for unrelated localStorage keys (missing keys are not auto-deleted)
 - Backup export/import is available in the Sync page to save and restore all tool data as a JSON file (all `artist-tools.*` localStorage data except sync settings, plus Reference Board IndexedDB images/layers)
+- Sync server enables WebSocket per-message compression by default and exposes `GET /stats` for room/message/byte counters
+- Sync page includes a manual server-stats panel that queries `/stats` from the configured server and displays inbound/outbound bytes/messages plus active docs/rooms
+- Sync page server-stats panel supports optional auto-refresh every 30 seconds after sync has been started (Save and connect)
 
 Server quick start:
 1. Change directory to `sync-server/`.

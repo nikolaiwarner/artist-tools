@@ -123,6 +123,34 @@ describe('syncData', () => {
       expect(entries.has('ls:other-app')).toBe(false);
     });
 
+    it('strips reference-board thumbnails from synced project metadata', async () => {
+      localStorage.setItem(
+        'artist-tools.reference-board.projects',
+        JSON.stringify([
+          {
+            id: 'p-1',
+            name: 'Board 1',
+            thumbnailDataUrl: 'data:image/jpeg;base64,THUMBNAIL',
+            viewport: { x: 0, y: 0, scale: 1 },
+          },
+        ])
+      );
+      dbMocks.exportAllDBData.mockResolvedValue({ images: {}, layers: [] });
+
+      const { entries } = await collectAllEntries();
+      const syncedValue = entries.get('ls:artist-tools.reference-board.projects');
+
+      expect(syncedValue).toBeDefined();
+      expect(syncedValue).not.toContain('thumbnailDataUrl');
+      expect(JSON.parse(syncedValue ?? '[]')).toEqual([
+        {
+          id: 'p-1',
+          name: 'Board 1',
+          viewport: { x: 0, y: 0, scale: 1 },
+        },
+      ]);
+    });
+
     it('returns db:image: entries for IndexedDB images', async () => {
       dbMocks.exportAllDBData.mockResolvedValue({
         images: { img1: 'data:image/png;base64,abc', img2: 'data:image/jpeg;base64,xyz' },
@@ -201,6 +229,50 @@ describe('syncData', () => {
     it('sets localStorage value for ls: key', async () => {
       await applyEntry('ls:artist-tools.art-pricing', '{"price":100}');
       expect(localStorage.getItem('artist-tools.art-pricing')).toBe('{"price":100}');
+    });
+
+    it('preserves local reference-board thumbnails when applying synced project metadata', async () => {
+      localStorage.setItem(
+        'artist-tools.reference-board.projects',
+        JSON.stringify([
+          {
+            id: 'p-1',
+            name: 'Local Board Name',
+            thumbnailDataUrl: 'data:image/jpeg;base64,LOCALTHUMB',
+            viewport: { x: 10, y: 20, scale: 1.5 },
+          },
+        ])
+      );
+
+      await applyEntry(
+        'ls:artist-tools.reference-board.projects',
+        JSON.stringify([
+          {
+            id: 'p-1',
+            name: 'Remote Board Name',
+            viewport: { x: 1, y: 2, scale: 2 },
+          },
+          {
+            id: 'p-2',
+            name: 'Remote Board 2',
+            viewport: { x: 0, y: 0, scale: 1 },
+          },
+        ])
+      );
+
+      expect(JSON.parse(localStorage.getItem('artist-tools.reference-board.projects') ?? '[]')).toEqual([
+        {
+          id: 'p-1',
+          name: 'Remote Board Name',
+          thumbnailDataUrl: 'data:image/jpeg;base64,LOCALTHUMB',
+          viewport: { x: 1, y: 2, scale: 2 },
+        },
+        {
+          id: 'p-2',
+          name: 'Remote Board 2',
+          viewport: { x: 0, y: 0, scale: 1 },
+        },
+      ]);
     });
 
     it('removes localStorage key when value is null', async () => {

@@ -43,6 +43,7 @@
 - `src/sync/syncRuntime.ts`: app-scoped singleton runtime that boots/maintains sync from saved settings across all routes
 - `src/sync/useSyncedLocalStorage.ts`: localStorage-backed React hook that rehydrates state when remote sync applies changes
 - `src/sync/SyncPage.tsx`: sync settings and connection status UI
+- `src/sync/SyncPage.tsx`: sync settings, connection status UI, and manual server `/stats` metrics panel
 - `src/sync/SyncPage.test.tsx`: sync settings confirmation behavior tests
 - `src/sync/*.test.ts`: sync granular entry and legacy snapshot behavior tests
 - `src/tools/canvas-builder/README.md`: **canonical feature spec** for Canvas Builder
@@ -149,8 +150,13 @@ Pages using this feature simply:
 - Sync page includes manual full backup export/import as JSON for local migration and recovery.
 - **Granular sync model**: each piece of data is a separate Yjs map entry with a prefixed key (`ls:`, `db:image:`, `db:layer:`), so changes to different tools/entities never overwrite each other.
 - Synced data includes all `artist-tools.*` localStorage keys except sync config keys under the `artist-tools.sync*` prefix, plus all Reference Board IndexedDB image/layer records.
+- Reference Board project thumbnails (`thumbnailDataUrl`) are intentionally excluded from synced localStorage project metadata to reduce bandwidth; each client preserves its own local thumbnails when remote project metadata applies.
+- Reference Board viewport persistence is commit-based (pan/zoom end) to avoid high-frequency sync writes during active canvas navigation.
 - Realtime sync keeps all Reference Board image assets synchronized, chunking images above 4 MB into multiple Yjs entries so transport/state updates stay smooth while preserving full fidelity.
 - Server data model is one Yjs room per sync key (`artist-tools-sync-v2` map); many users are supported by using different keys.
+- Sync server supports WebSocket per-message compression and a `GET /stats` endpoint for lightweight bandwidth and room activity monitoring.
+- Sync page can manually query and display key `/stats` metrics (in/out bytes/messages, active docs, rooms tracked) for quick operational checks.
+- Sync page server metrics panel includes an optional 30-second auto-refresh toggle when sync is active.
 - Initial connect is remote-first: existing room state is applied per-entry before pushing local-only entries to Yjs.
 - Applying remote entries never deletes unrelated local data — each key is updated independently.
 - Open tool pages rehydrate in place from `artist-tools:sync-applied` events, including Reference Board canvas/project views and shared Posterize Viewer controls.
