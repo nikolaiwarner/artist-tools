@@ -2365,7 +2365,44 @@ export function ReferenceBoardCanvasPage() {
           ariaLabel="Canvas actions"
           onAddText={handleAddText}
           onAddImage={openImagePicker}
-          onPaste={() => void handlePasteLayers(copiedLayersRef.current, copiedLayersRef.current[0]?.projectId)}
+          onPaste={async () => {
+            // Try to read from clipboard (like paste event)
+            const clipboard = globalThis.navigator?.clipboard;
+            let handled = false;
+            if (clipboard && typeof clipboard.read === 'function') {
+              try {
+                const items = await clipboard.read();
+                const imageFiles: File[] = [];
+                for (const item of items) {
+                  for (const type of item.types) {
+                    if (type.startsWith('image/')) {
+                      const blob = await item.getType(type);
+                      imageFiles.push(new File([blob], 'pasted-image', { type: blob.type }));
+                    }
+                  }
+                }
+                if (imageFiles.length > 0) {
+                  copiedLayersRef.current = [];
+                  void importFiles(imageFiles);
+                  handled = true;
+                }
+              } catch {}
+            }
+            if (!handled && clipboard && typeof clipboard.readText === 'function') {
+              try {
+                const clipboardText = await clipboard.readText();
+                const clipboardPayload = parseLayerClipboardPayload(clipboardText);
+                if (clipboardPayload && clipboardPayload.layers.length > 0) {
+                  copiedLayersRef.current = clipboardPayload.layers.map(cloneLayerForClipboard);
+                  void handlePasteLayers(clipboardPayload.layers, clipboardPayload.sourceProjectId);
+                  handled = true;
+                }
+              } catch {}
+            }
+            if (!handled && copiedLayersRef.current.length > 0) {
+              void handlePasteLayers(copiedLayersRef.current, copiedLayersRef.current[0]?.projectId);
+            }
+          }}
         />
       )}
 
