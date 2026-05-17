@@ -131,7 +131,7 @@ Art Pricing Calculator helps artists estimate a selling price based on time, can
 
 ### Reference Board
 
-Reference Board is an infinite-canvas reference image board. Create projects, import images, arrange and transform them on a freely pannable/zoomable canvas, annotate with text, and drop in composition boxes.
+Reference Board is an infinite-canvas reference image board. Create projects, import images, arrange and transform them on a freely pannable/zoomable canvas, annotate with text, drop in composition boxes, and overlay transfer grids.
 
 Key features:
 - Multiple named projects, each with its own canvas
@@ -144,13 +144,18 @@ Key features:
 - Capture still images directly from the camera via toolbar button
 - Imported/pasted/captured images are auto-optimized client-side by downscaling and selecting the smallest encoded output (JPEG/WebP/PNG) before storage/sync
 - Per-project canvas background color picker in the toolbar (persisted locally)
+- Export menu in the toolbar with `Export all layers as PNG` and `Export selected layers as PNG`
 - Rotate/scale via canvas handles, plus flip H/V, opacity, non-destructive crop per image layer
 - Per-image tonal controls are grouped into a compact Tonal section (Color/B&W mode buttons + posterize level chips for off or 2-6 levels), using the same posterize pipeline as Camera Tonal Study
 - Optional non-destructive image masks per image layer, including automatic on-device segmentation detection (MODNet-first with fallback models) plus draw/edit/clear controls
 - Duplicating image layers reuses the same stored image data (no duplicate image blob writes)
 - Text layers with font, size, bold/italic, color, and alignment controls
 - Box layers for composition guides with resizable rectangle bounds plus stroke/fill controls
+- Grid layers for transfer practice with configurable vertical/horizontal line counts and line color
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
+- Universal layer locking for image/text/box/grid layers (locked layers stay selectable for quick unlock)
+- Mobile layer panel can be hidden/shown with a floating toggle to maximize visible canvas area while editing
+- Reference Board canvas route renders full-bleed (no shell padding) so canvas space reaches the viewport edges
 - Empty-canvas context menu: right-click (desktop) or long-press (mobile) opens `Add Text`, `Add Image`, and `Paste`
 - Selected-layer panel buttons for ordering (front/forward/backward/back) in addition to duplicate/delete controls
 - Ctrl/Cmd+C and Ctrl/Cmd+V layer copy/paste uses the system clipboard, including cross-project paste

@@ -35,8 +35,8 @@ import {
   saveImage,
   saveLayer,
 } from './db';
-import { ArrowLeft, ImagePlus, Type, Square, Download, Undo2, Redo2, Camera } from 'lucide-react';
-import type { CanvasLayer, CropRect, ImageLayer, ShapeLayer, TextLayer, Viewport } from './types';
+import { ArrowLeft, ImagePlus, Type, Square, Grid3x3, Download, Undo2, Redo2, Camera } from 'lucide-react';
+import type { CanvasLayer, CropRect, GridLayer, ImageLayer, ShapeLayer, TextLayer, Viewport } from './types';
 import { CanvasStage } from './components/CanvasStage';
 import { ContextMenu } from './components/ContextMenu';
 import { LayerPanel } from './components/LayerPanel';
@@ -128,6 +128,10 @@ function cloneLayerForClipboard(layer: CanvasLayer): CanvasLayer {
     return { ...layer } as ShapeLayer;
   }
 
+  if (layer.type === 'grid') {
+    return { ...layer } as GridLayer;
+  }
+
   return { ...layer } as TextLayer;
 }
 
@@ -205,6 +209,17 @@ function getLayerBounds(layer: CanvasLayer): BoundsRect {
   }
 
   if (layer.type === 'shape') {
+    const width = layer.width * Math.abs(layer.scaleX);
+    const height = layer.height * Math.abs(layer.scaleY);
+    return {
+      minX: layer.x,
+      minY: layer.y,
+      maxX: layer.x + width,
+      maxY: layer.y + height,
+    };
+  }
+
+  if (layer.type === 'grid') {
     const width = layer.width * Math.abs(layer.scaleX);
     const height = layer.height * Math.abs(layer.scaleY);
     return {
@@ -346,6 +361,13 @@ function captureStageWithBackground(stage: Konva.Stage, backgroundColor: string,
 // Capture stage transparent (for exports)
 function captureStageTransparent(stage: Konva.Stage, options: { mimeType?: string; pixelRatio?: number }): string {
   return stage.toDataURL(options);
+}
+
+function downloadDataUrl(fileName: string, dataUrl: string): void {
+  const link = document.createElement('a');
+  link.download = fileName;
+  link.href = dataUrl;
+  link.click();
 }
 
 // ── Image compression ──────────────────────────────────────────────────────────
@@ -549,11 +571,11 @@ function ImageNode({
   }, [img, layer.posterizeLevels, layer.tonalMode, maskImg]);
 
   useEffect(() => {
-    if (isSelected && transformerRef.current && nodeRef.current) {
+    if (isSelected && !layer.locked && transformerRef.current && nodeRef.current) {
       transformerRef.current.nodes([nodeRef.current]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected, transformerRef]);
+  }, [isSelected, layer.locked, transformerRef]);
 
   const handleTouchStart = () => {
     // Start long-press timer (500ms)
@@ -601,6 +623,7 @@ function ImageNode({
   return (
     <KonvaImage
       ref={nodeRef}
+      id={layer.id}
       image={renderedImage}
       x={layer.x}
       y={layer.y}
@@ -622,7 +645,7 @@ function ImageNode({
           }
           : undefined
       }
-      draggable
+      draggable={!layer.locked}
       onClick={onClick}
       onTap={onTap}
       onTouchStart={handleTouchStart}
@@ -686,11 +709,11 @@ function TextNode({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isSelected && transformerRef.current && nodeRef.current) {
+    if (isSelected && !layer.locked && transformerRef.current && nodeRef.current) {
       transformerRef.current.nodes([nodeRef.current]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected, transformerRef]);
+  }, [isSelected, layer.locked, transformerRef]);
 
   const handleTouchStart = () => {
     // Start long-press timer (500ms)
@@ -739,6 +762,7 @@ function TextNode({
   return (
     <KonvaText
       ref={nodeRef}
+      id={layer.id}
       text={layer.text}
       x={layer.x}
       y={layer.y}
@@ -753,7 +777,7 @@ function TextNode({
       fill={layer.fill}
       align={layer.align}
       visible={!isEditing}
-      draggable
+      draggable={!layer.locked}
       onClick={onClick}
       onTap={onTap}
       onDblClick={onDblClick}
@@ -809,11 +833,11 @@ function ShapeNode({
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (isSelected && transformerRef.current && nodeRef.current) {
+    if (isSelected && !layer.locked && transformerRef.current && nodeRef.current) {
       transformerRef.current.nodes([nodeRef.current]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [isSelected, transformerRef]);
+  }, [isSelected, layer.locked, transformerRef]);
 
   const handleTouchStart = () => {
     longPressTimerRef.current = setTimeout(() => {
@@ -852,6 +876,7 @@ function ShapeNode({
   return (
     <Rect
       ref={nodeRef}
+      id={layer.id}
       x={layer.x}
       y={layer.y}
       width={layer.width}
@@ -863,7 +888,7 @@ function ShapeNode({
       fill={layer.fill}
       stroke={layer.stroke}
       strokeWidth={layer.strokeWidth}
-      draggable
+      draggable={!layer.locked}
       onClick={onClick}
       onTap={onTap}
       onTouchStart={handleTouchStart}
@@ -886,6 +911,148 @@ function ShapeNode({
   );
 }
 
+interface GridNodeProps {
+  layer: GridLayer;
+  isSelected: boolean;
+  isMultiSelected: boolean;
+  transformerRef: React.RefObject<Konva.Transformer | null>;
+  onClick: (e: Konva.KonvaEventObject<MouseEvent>) => void;
+  onTap: () => void;
+  onDragStart: () => void;
+  onDragMove: (x: number, y: number) => void;
+  onDragEnd: (x: number, y: number) => void;
+  onTransformEnd: (scaleX: number, scaleY: number, rotation: number) => void;
+  onContextMenu: (e: Konva.KonvaEventObject<MouseEvent>) => void;
+}
+
+function buildGridPositions(size: number, lineCount: number): number[] {
+  const count = Math.max(1, Math.round(lineCount));
+  if (count === 1) {
+    return [size / 2];
+  }
+
+  return Array.from({ length: count }, (_, index) => (size * index) / (count - 1));
+}
+
+function GridNode({
+  layer,
+  isSelected,
+  isMultiSelected,
+  transformerRef,
+  onClick,
+  onTap,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onTransformEnd,
+  onContextMenu,
+}: GridNodeProps) {
+  const nodeRef = useRef<Konva.Group>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (isSelected && !layer.locked && transformerRef.current && nodeRef.current) {
+      transformerRef.current.nodes([nodeRef.current]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+  }, [isSelected, layer.locked, transformerRef]);
+
+  const verticalPositions = useMemo(
+    () => buildGridPositions(layer.width, layer.verticalLines),
+    [layer.width, layer.verticalLines]
+  );
+  const horizontalPositions = useMemo(
+    () => buildGridPositions(layer.height, layer.horizontalLines),
+    [layer.height, layer.horizontalLines]
+  );
+
+  const handleTouchStart = () => {
+    longPressTimerRef.current = setTimeout(() => {
+      const node = nodeRef.current;
+      if (!node) return;
+      const stage = node.getStage();
+      const pointerPos = stage?.getPointerPosition();
+      if (!pointerPos) return;
+
+      const evt = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: pointerPos.x,
+        clientY: pointerPos.y,
+      });
+
+      onContextMenu({ evt } as Konva.KonvaEventObject<MouseEvent>);
+    }, 500);
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleDragStart = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    onDragStart();
+  };
+
+  return (
+    <Group
+      ref={nodeRef}
+      id={layer.id}
+      x={layer.x}
+      y={layer.y}
+      scaleX={layer.scaleX}
+      scaleY={layer.scaleY}
+      rotation={layer.rotation}
+      opacity={layer.opacity}
+      draggable={!layer.locked}
+      onClick={onClick}
+      onTap={onTap}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onDragStart={handleDragStart}
+      onDragMove={(e) => onDragMove(e.target.x(), e.target.y())}
+      onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
+      shadowEnabled={isMultiSelected}
+      shadowColor="#4da3ff"
+      shadowBlur={12}
+      shadowOpacity={0.9}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        onTransformEnd(node.scaleX(), node.scaleY(), node.rotation());
+        node.scaleX(1);
+        node.scaleY(1);
+      }}
+      onContextMenu={onContextMenu}
+    >
+      <Rect width={layer.width} height={layer.height} fill="rgba(0,0,0,0.001)" />
+      {verticalPositions.map((x, index) => (
+        <Line
+          key={`v-${index}`}
+          points={[x, 0, x, layer.height]}
+          stroke={layer.stroke}
+          strokeWidth={layer.strokeWidth}
+          listening={false}
+        />
+      ))}
+      {horizontalPositions.map((y, index) => (
+        <Line
+          key={`h-${index}`}
+          points={[0, y, layer.width, y]}
+          stroke={layer.stroke}
+          strokeWidth={layer.strokeWidth}
+          listening={false}
+        />
+      ))}
+    </Group>
+  );
+}
+
 // ── Main canvas page ─────────────────────────────────────────────────────────
 
 export function ReferenceBoardCanvasPage() {
@@ -904,6 +1071,7 @@ export function ReferenceBoardCanvasPage() {
   const historyManagerRef = useRef(new UndoRedoManager());
   const canvasLongPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const canvasLongPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
 
   const [layers, setLayers] = useState<CanvasLayer[]>([]);
   const [canUndo, setCanUndo] = useState(false);
@@ -929,6 +1097,8 @@ export function ReferenceBoardCanvasPage() {
   const [maskEditor, setMaskEditor] = useState<MaskEditorState | null>(null);
   const [showCameraCapture, setShowCameraCapture] = useState(false);
   const [cameraFacingMode, setCameraFacingMode] = useState<CameraFacingMode>('environment');
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [isLayerPanelMobileVisible, setIsLayerPanelMobileVisible] = useState(true);
   const isSelectingRef = useRef(false);
   const selectionStartRef = useRef<{ x: number; y: number } | null>(null);
   const multiDragStartPositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
@@ -1403,12 +1573,20 @@ export function ReferenceBoardCanvasPage() {
   }, [editingTextId, handlePasteLayers, importFiles, projectId]);
 
   useEffect(() => {
-    if (selectedId || cropLayerId) return;
-    if (transformerRef.current) {
+    if (!transformerRef.current) return;
+
+    if (!selectedId || cropLayerId) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer()?.batchDraw();
+      return;
+    }
+
+    const selectedLayerCandidate = layers.find((layer) => layer.id === selectedId);
+    if (selectedLayerCandidate?.locked) {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [selectedId, cropLayerId]);
+  }, [layers, selectedId, cropLayerId]);
 
   // ── Layer operations ──────────────────────────────────────────────────────
 
@@ -1870,6 +2048,38 @@ export function ReferenceBoardCanvasPage() {
     scheduleThumbnail();
   }
 
+  function handleAddGrid() {
+    saveToHistory();
+    const stage = stageRef.current;
+    const centerX = stage ? (stage.width() / 2 - viewport.x) / viewport.scale : 300;
+    const centerY = stage ? (stage.height() / 2 - viewport.y) / viewport.scale : 200;
+
+    const layer: GridLayer = {
+      id: newId(),
+      projectId: projectId!,
+      type: 'grid',
+      x: centerX - 240,
+      y: centerY - 160,
+      rotation: 0,
+      opacity: 1,
+      zIndex: nextZIndex(layers),
+      width: 480,
+      height: 320,
+      verticalLines: 6,
+      horizontalLines: 6,
+      stroke: '#ffffff',
+      strokeWidth: 1,
+      scaleX: 1,
+      scaleY: 1,
+    };
+
+    setLayers((prev) => [...prev, layer]);
+    void saveLayer(layer);
+    setSelectedId(layer.id);
+    setMultiSelectedIds(new Set([layer.id]));
+    scheduleThumbnail();
+  }
+
   // ── Context menu ──────────────────────────────────────────────────────────
 
   function handleContextMenu(e: Konva.KonvaEventObject<MouseEvent>, layerId: string) {
@@ -1953,6 +2163,31 @@ export function ReferenceBoardCanvasPage() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isExportMenuOpen) return;
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if (!exportMenuRef.current) return;
+      if (exportMenuRef.current.contains(event.target as Node)) return;
+      setIsExportMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsExportMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('touchstart', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('touchstart', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isExportMenuOpen]);
+
   // ── Box select handlers ────────────────────────────────────────────────────
 
   function handleSelectionStart(x: number, y: number) {
@@ -2015,13 +2250,13 @@ export function ReferenceBoardCanvasPage() {
 
   // ── Download / export ─────────────────────────────────────────────────────
 
-  function handleDownload() {
+  function handleExportPng(targetLayers: CanvasLayer[], fileName: string) {
     const stage = stageRef.current;
-    if (!stage || layers.length === 0) return;
+    if (!stage || targetLayers.length === 0) return;
 
-    // Compute approximate bounding box of all layers in world space
+    // Compute approximate bounding box of target layers in world space
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const layer of layers) {
+    for (const layer of targetLayers) {
       const bounds = getLayerBounds(layer);
       minX = Math.min(minX, bounds.minX);
       minY = Math.min(minY, bounds.minY);
@@ -2034,12 +2269,25 @@ export function ReferenceBoardCanvasPage() {
     const worldH = Math.max(1, maxY - minY + pad * 2);
 
     let dataUrl = '';
+    const targetLayerIds = new Set(targetLayers.map((layer) => layer.id));
+    const hiddenNodes: Konva.Node[] = [];
+
     withTransformerNodesPreserved(transformerRef.current, () => {
       const saved = {
         x: stage.x(), y: stage.y(),
         scaleX: stage.scaleX(), scaleY: stage.scaleY(),
         width: stage.width(), height: stage.height(),
       };
+
+      if (targetLayerIds.size !== layers.length) {
+        for (const layer of layers) {
+          if (targetLayerIds.has(layer.id)) continue;
+          const node = stage.findOne(`#${layer.id}`);
+          if (!node || !node.visible()) continue;
+          node.visible(false);
+          hiddenNodes.push(node);
+        }
+      }
 
       stage.setAttrs({
         x: -(minX - pad),
@@ -2048,17 +2296,29 @@ export function ReferenceBoardCanvasPage() {
         width: Math.round(worldW),
         height: Math.round(worldH),
       });
+      stage.batchDraw();
 
       dataUrl = captureStageTransparent(stage, { mimeType: 'image/png', pixelRatio: 1 });
+
+      for (const node of hiddenNodes) {
+        node.visible(true);
+      }
 
       stage.setAttrs(saved);
       stage.batchDraw();
     });
 
-    const link = document.createElement('a');
-    link.download = `${project?.name ?? 'canvas'}.png`;
-    link.href = dataUrl;
-    link.click();
+    downloadDataUrl(fileName, dataUrl);
+  }
+
+  function handleExportAllLayers() {
+    handleExportPng(layers, `${project?.name ?? 'canvas'}.png`);
+    setIsExportMenuOpen(false);
+  }
+
+  function handleExportSelectedLayers(selectedLayers: CanvasLayer[]) {
+    handleExportPng(selectedLayers, `${project?.name ?? 'canvas'}-selected.png`);
+    setIsExportMenuOpen(false);
   }
 
   // ── Sorted layers ─────────────────────────────────────────────────────────
@@ -2072,6 +2332,17 @@ export function ReferenceBoardCanvasPage() {
     () => layers.find((l) => l.id === selectedId) ?? null,
     [layers, selectedId]
   );
+
+  const selectedLayersForExport = useMemo(() => {
+    const selectedLayerIds = multiSelectedIds.size > 0
+      ? multiSelectedIds
+      : selectedId
+        ? new Set([selectedId])
+        : new Set<string>();
+
+    if (selectedLayerIds.size === 0) return [];
+    return layers.filter((layer) => selectedLayerIds.has(layer.id));
+  }, [layers, multiSelectedIds, selectedId]);
 
   // ── Crop overlay state ────────────────────────────────────────────────────
 
@@ -2158,9 +2429,43 @@ export function ReferenceBoardCanvasPage() {
           <button className="refboard-toolbar-btn" onClick={handleAddShape} title="Add box layer">
             <Square size={16} />
           </button>
-          <button className="refboard-toolbar-btn" onClick={handleDownload} title="Export canvas as PNG" disabled={layers.length === 0}>
-            <Download size={16} />
+          <button className="refboard-toolbar-btn" onClick={handleAddGrid} title="Add grid layer">
+            <Grid3x3 size={16} />
           </button>
+          <div className="refboard-toolbar-menu-wrap" ref={exportMenuRef}>
+            <button
+              className="refboard-toolbar-btn"
+              onClick={() => setIsExportMenuOpen((prev) => !prev)}
+              title="Export PNG options"
+              aria-label="Export options"
+              aria-haspopup="menu"
+              aria-expanded={isExportMenuOpen}
+              disabled={layers.length === 0}
+            >
+              <Download size={16} />
+            </button>
+            {isExportMenuOpen && (
+              <div className="refboard-card-menu refboard-toolbar-menu" role="menu" aria-label="Export PNG options">
+                <button
+                  className="refboard-menu-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={handleExportAllLayers}
+                >
+                  Export all layers as PNG
+                </button>
+                <button
+                  className="refboard-menu-item"
+                  type="button"
+                  role="menuitem"
+                  onClick={() => handleExportSelectedLayers(selectedLayersForExport)}
+                  disabled={selectedLayersForExport.length === 0}
+                >
+                  Export selected layers as PNG
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2236,6 +2541,23 @@ export function ReferenceBoardCanvasPage() {
                   }
                   onContextMenu={(e) => handleContextMenu(e, layer.id)}
                 />
+              ) : layer.type === 'grid' ? (
+                <GridNode
+                  key={layer.id}
+                  layer={layer as GridLayer}
+                  isSelected={selectedId === layer.id && !cropLayerId}
+                  isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
+                  transformerRef={transformerRef}
+                  onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
+                  onTap={() => handleLayerClick(layer.id, false)}
+                  onDragStart={() => handleLayerDragStart(layer.id)}
+                  onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
+                  onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
+                  onTransformEnd={(scaleX, scaleY, rotation) =>
+                    updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<GridLayer>)
+                  }
+                  onContextMenu={(e) => handleContextMenu(e, layer.id)}
+                />
               ) : (
                 <TextNode
                   key={layer.id}
@@ -2272,6 +2594,7 @@ export function ReferenceBoardCanvasPage() {
         {/* Layer panel */}
         {selectedLayer && (
           <LayerPanel
+            className={isLayerPanelMobileVisible ? '' : 'refboard-layer-panel-hidden-mobile'}
             layer={selectedLayer}
             onUpdate={(patch) => updateLayer(selectedLayer.id, patch)}
             onDelete={() => handleDeleteLayer(selectedLayer.id)}
@@ -2288,6 +2611,17 @@ export function ReferenceBoardCanvasPage() {
             onDetectMask={selectedLayer.type === 'image' ? () => void handleDetectMask(selectedLayer.id) : undefined}
             isDetectingMask={selectedLayer.type === 'image' && maskDetectingLayerId === selectedLayer.id}
           />
+        )}
+
+        {selectedLayer && (
+          <button
+            type="button"
+            className="refboard-mobile-panel-toggle"
+            onClick={() => setIsLayerPanelMobileVisible((visible) => !visible)}
+            aria-label={isLayerPanelMobileVisible ? 'Hide layer panel' : 'Show layer panel'}
+          >
+            {isLayerPanelMobileVisible ? 'Hide Panel' : 'Show Panel'}
+          </button>
         )}
 
         {!selectedLayer && multiSelectedIds.size > 1 && (
@@ -2410,7 +2744,7 @@ export function ReferenceBoardCanvasPage() {
                   void importFiles(imageFiles);
                   handled = true;
                 }
-              } catch {}
+              } catch { }
             }
             if (!handled && clipboard && typeof clipboard.readText === 'function') {
               try {
@@ -2421,7 +2755,7 @@ export function ReferenceBoardCanvasPage() {
                   void handlePasteLayers(clipboardPayload.layers, clipboardPayload.sourceProjectId);
                   handled = true;
                 }
-              } catch {}
+              } catch { }
             }
             if (!handled && copiedLayersRef.current.length > 0) {
               void handlePasteLayers(copiedLayersRef.current, copiedLayersRef.current[0]?.projectId);

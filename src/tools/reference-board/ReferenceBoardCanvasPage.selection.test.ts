@@ -8,7 +8,7 @@ import {
   withTransformerNodesPreserved,
   type SelectionBox,
 } from './ReferenceBoardCanvasPage';
-import type { CanvasLayer, ImageLayer, ShapeLayer, TextLayer } from './types';
+import type { CanvasLayer, GridLayer, ImageLayer, ShapeLayer, TextLayer } from './types';
 
 function makeImageLayer(overrides: Partial<ImageLayer> = {}): ImageLayer {
   return {
@@ -73,6 +73,28 @@ function makeShapeLayer(overrides: Partial<ShapeLayer> = {}): ShapeLayer {
     rotation: 0,
     opacity: 1,
     zIndex: 3,
+    ...overrides,
+  };
+}
+
+function makeGridLayer(overrides: Partial<GridLayer> = {}): GridLayer {
+  return {
+    id: 'grid-1',
+    projectId: 'project-1',
+    type: 'grid',
+    x: 180,
+    y: 160,
+    width: 300,
+    height: 220,
+    verticalLines: 6,
+    horizontalLines: 6,
+    stroke: '#ffffff',
+    strokeWidth: 1,
+    scaleX: 1,
+    scaleY: 1,
+    rotation: 0,
+    opacity: 1,
+    zIndex: 4,
     ...overrides,
   };
 }
@@ -144,6 +166,22 @@ describe('selection helpers', () => {
 
     expect(result.multiSelectedIds).toEqual(new Set(['shape-box']));
     expect(result.selectedId).toBe('shape-box');
+  });
+
+  it('uses grid bounds during box selection', () => {
+    const grid = makeGridLayer({ id: 'grid-box', x: 280, y: 200, width: 240, height: 180 });
+
+    const box: SelectionBox = {
+      startX: 320,
+      startY: 240,
+      endX: 360,
+      endY: 280,
+    };
+
+    const result = computeSelectionResult([grid], box);
+
+    expect(result.multiSelectedIds).toEqual(new Set(['grid-box']));
+    expect(result.selectedId).toBe('grid-box');
   });
 
   it('clears selection state when no layers match', () => {

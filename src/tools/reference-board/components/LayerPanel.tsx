@@ -1,6 +1,8 @@
 import {
   Copy,
   Trash2,
+  Lock,
+  LockOpen,
   FlipHorizontal2,
   FlipVertical2,
   Crop,
@@ -9,12 +11,13 @@ import {
   ChevronDown,
   ChevronsDown,
 } from 'lucide-react';
-import type { CanvasLayer, ImageLayer, ShapeLayer, TextLayer } from '../types';
+import type { CanvasLayer, GridLayer, ImageLayer, ShapeLayer, TextLayer } from '../types';
 
 // ── Component ──────────────────────────────────────────────────────────────────
 
 interface LayerPanelProps {
   layer: CanvasLayer;
+  className?: string;
   onUpdate: (patch: Partial<CanvasLayer>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -33,6 +36,7 @@ interface LayerPanelProps {
 
 export function LayerPanel({
   layer,
+  className,
   onUpdate,
   onDelete,
   onDuplicate,
@@ -51,6 +55,7 @@ export function LayerPanel({
   const imageLayer = layer.type === 'image' ? (layer as ImageLayer) : null;
   const textLayer = layer.type === 'text' ? (layer as TextLayer) : null;
   const shapeLayer = layer.type === 'shape' ? (layer as ShapeLayer) : null;
+  const gridLayer = layer.type === 'grid' ? (layer as GridLayer) : null;
 
   function numInput(
     label: string,
@@ -90,12 +95,28 @@ export function LayerPanel({
     : 0;
 
   return (
-    <aside className="refboard-layer-panel">
+    <aside className={`refboard-layer-panel${className ? ` ${className}` : ''}`}>
       <div className="refboard-panel-section">
         <p className="refboard-panel-eyebrow">
-          {layer.type === 'image' ? 'Image Layer' : layer.type === 'text' ? 'Text Layer' : 'Shape Layer'}
+          {
+            layer.type === 'image'
+              ? 'Image Layer'
+              : layer.type === 'text'
+                ? 'Text Layer'
+                : layer.type === 'shape'
+                  ? 'Shape Layer'
+                  : 'Grid Layer'
+          }
         </p>
         <div className="refboard-panel-row">
+          <button
+            onClick={() => onUpdate({ locked: !Boolean(layer.locked) })}
+            title={layer.locked ? 'Unlock layer' : 'Lock layer'}
+            aria-label={layer.locked ? 'Unlock layer' : 'Lock layer'}
+            className="refboard-icon-btn"
+          >
+            {layer.locked ? <LockOpen size={15} /> : <Lock size={15} />}
+          </button>
           <button onClick={onDuplicate} title="Duplicate layer" className="refboard-icon-btn">
             <Copy size={15} />
           </button>
@@ -391,6 +412,42 @@ export function LayerPanel({
             >
               {shapeLayer.fill === 'transparent' ? 'Transparent Fill' : 'Use Transparent Fill'}
             </button>
+          </div>
+        </>
+      )}
+
+      {gridLayer && (
+        <>
+          <div className="refboard-panel-section">
+            <p className="refboard-panel-eyebrow">Grid</p>
+            {numInput(
+              'Vertical Lines',
+              gridLayer.verticalLines,
+              (v) => onUpdate({ verticalLines: Math.max(1, Math.round(v)) } as Partial<GridLayer>),
+              { min: 1, max: 64 }
+            )}
+            {numInput(
+              'Horizontal Lines',
+              gridLayer.horizontalLines,
+              (v) => onUpdate({ horizontalLines: Math.max(1, Math.round(v)) } as Partial<GridLayer>),
+              { min: 1, max: 64 }
+            )}
+            {numInput(
+              'Line Width',
+              gridLayer.strokeWidth,
+              (v) => onUpdate({ strokeWidth: Math.max(1, Math.round(v)) } as Partial<GridLayer>),
+              { min: 1, max: 16 }
+            )}
+
+            <label className="refboard-panel-label">
+              <span>Line Color</span>
+              <input
+                type="color"
+                value={gridLayer.stroke}
+                onChange={(e) => onUpdate({ stroke: e.target.value } as Partial<GridLayer>)}
+                className="refboard-panel-color"
+              />
+            </label>
           </div>
         </>
       )}

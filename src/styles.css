@@ -190,6 +190,14 @@ h3 {
     padding: 10px;
 }
 
+.app-frame--reference-canvas {
+  padding: 0 !important;
+}
+
+.site-main--reference-canvas {
+  padding: 0;
+}
+
 .home-layout,
 .tool-layout {
   display: grid;
@@ -1342,6 +1350,15 @@ p {
   background: var(--surface-strong);
 }
 
+.refboard-menu-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.refboard-menu-item:disabled:hover {
+  background: none;
+}
+
 .refboard-menu-item--danger {
   color: #7a1b1b;
 }
@@ -1389,7 +1406,7 @@ p {
 .refboard-canvas-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 58px);
+  height: 100dvh;
   min-height: 0;
   overflow: hidden;
   position: relative;
@@ -1462,6 +1479,17 @@ p {
   gap: 4px;
 }
 
+.refboard-toolbar-menu-wrap {
+  position: relative;
+}
+
+.refboard-toolbar-menu {
+  top: calc(100% + 6px);
+  bottom: auto;
+  right: 0;
+  min-width: 220px;
+}
+
 .refboard-toolbar-color {
   padding: 0;
   overflow: hidden;
@@ -1495,8 +1523,8 @@ p {
   position: relative;
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--stroke);
-  border-radius: 6px;
+  border: none;
+  border-radius: 0;
   overflow: hidden;
   background-color: #1f1f1f;
   background-image:
@@ -1742,6 +1770,10 @@ p {
 
 .refboard-icon-btn:hover {
   background: #f1f1ee;
+}
+
+.refboard-mobile-panel-toggle {
+  display: none;
 }
 
 @media (max-width: 780px) {
@@ -2035,7 +2067,7 @@ p {
   }
 
   .refboard-canvas-page {
-    height: calc(100vh - 52px);
+    height: 100dvh;
   }
 
   .refboard-editor-body {
@@ -2057,6 +2089,10 @@ p {
     display: flex;
     flex-direction: column;
     animation: slideUp 0.3s ease-out;
+  }
+
+  .refboard-layer-panel.refboard-layer-panel-hidden-mobile {
+    display: none;
   }
 
   @keyframes slideUp {
@@ -2092,6 +2128,27 @@ p {
     border-bottom: none;
     z-index: 100;
     animation: slideUp 0.3s ease-out;
+  }
+
+  .refboard-mobile-panel-toggle {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 64px);
+    right: 10px;
+    z-index: 140;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 8px 12px;
+    min-height: 36px;
+    background: rgba(20, 20, 20, 0.8);
+    color: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    backdrop-filter: blur(8px);
+  }
+
+  .refboard-mobile-panel-toggle:hover {
+    background: rgba(20, 20, 20, 0.92);
   }
 
   .refboard-toolbar {

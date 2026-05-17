@@ -1,6 +1,6 @@
 # Reference Board
 
-Reference Board is an infinite-canvas reference image board for painters, illustrators, and artists. Organize reference images, add text annotations and composition boxes, and transform layers across multiple projects, all stored locally in your browser.
+Reference Board is an infinite-canvas reference image board for painters, illustrators, and artists. Organize reference images, add text annotations and composition boxes, overlay transfer grids, and transform layers across multiple projects, all stored locally in your browser.
 
 ## How It Works
 
@@ -34,11 +34,11 @@ Reference Board is an infinite-canvas reference image board for painters, illust
   - This ensures the most recent action (copying an external image) takes precedence
 - Delete/Backspace removes the selected layer
 - Canvas background is a dark grid (not exported)
-- **Export**: toolbar download icon exports all layers as a flattened PNG
+- **Export**: toolbar download icon opens PNG export options for `Export all layers as PNG` and `Export selected layers as PNG`
 - **Undo/Redo**: toolbar buttons or Ctrl+Z / Ctrl+Shift+Z (Cmd+Z / Cmd+Shift+Z on Mac)
 - **Copy/Paste Layers**: Ctrl/Cmd+C copies the current selection; Ctrl/Cmd+V pastes the copied layers (or clipboard images if available)
 - **Box Select**: click and drag on empty canvas to draw a blue selection rectangle; layers fully inside the box are selected
-- Box select works for image, text, and box layers
+- Box select works for image, text, box, and grid layers
 - Single match selects that layer (transformer handles shown); multiple matches enter multi-select state
 - Multi-selected layers are highlighted and can be dragged together while preserving their relative spacing
 - Multi-selection can be deleted with Delete/Backspace or the multi-select panel action
@@ -52,6 +52,7 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Right-click menu**: On desktop, right-click a layer to open the context menu; on mobile/touch devices, use long-press
 - **Canvas Context Menu**: Right-click empty canvas space (or long-press on touch) to open canvas actions for `Add Text`, `Add Image`, and `Paste`
 - **Layer Panel**: Appears as a bottom drawer on mobile devices when a layer is selected, allowing full editing of layer properties
+- **Layer Panel Toggle**: On mobile, a floating `Hide Panel` / `Show Panel` control lets you collapse the layer drawer when you need a clearer canvas view
 - **Touch Targets**: All buttons are optimized for touch with 44×44px minimum size on mobile
 
 ### Image Layers
@@ -90,12 +91,27 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Layer panel** (opens as bottom drawer on mobile):
   - Width, height, stroke width, stroke color, fill color, transparent-fill toggle, opacity slider
 
+### Grid Layers
+- Add via **grid icon** toolbar button
+- Designed as transferable drawing guides for artists who need vertical/horizontal grid overlays over reference work
+- Click/tap to select; drag to reposition; use transformer handles to scale and rotate
+- **Layer panel** (opens as bottom drawer on mobile):
+  - Vertical line count
+  - Horizontal line count
+  - Line width
+  - Line color
+
 ### Layer Ordering
 - **Desktop**: Right-click (or long press on touch) opens context menu: Bring to Front, Bring Forward, Send Backward, Send to Back
 - **Mobile**: Long-press (hold 500ms) on a layer to open context menu with the same layer ordering options
 - Context menu also provides Copy, Delete, and Duplicate
 - Right-clicking empty canvas space shows a canvas context menu with `Add Text`, `Add Image`, and `Paste`
 - Layer panel provides duplicate (copy icon), delete (trash icon), and ordering buttons (Top/Up/Down/Bottom)
+
+### Layer Locking
+- All layer types support a lock toggle in the selected-layer panel
+- Locked layers remain selectable (tap/click to select), so users can still open the layer panel and unlock them
+- Locked layers cannot be dragged or transformed until unlocked
 
 ### Mobile-First Experience
 
@@ -111,9 +127,11 @@ Reference Board is designed with first-class support for both desktop and mobile
 
 ### Mobile UI Adaptations
 - **Responsive Layout**: On screens narrower than 780px, the layer panel appears as a bottom drawer instead of a side panel, maximizing visible canvas space
+- **Collapsible Drawer**: The mobile layer drawer can be hidden and shown without losing the current layer selection
 - **Touch-Optimized Buttons**: All toolbar and control buttons are 44×44px minimum on mobile for comfortable touch targets
 - **Thumb-first tonal controls**: tonal mode and posterize chips use larger touch targets in the mobile bottom drawer
 - **Drawer Animation**: Layer panel slides up from the bottom with smooth animation on mobile
+- **Full-Bleed Canvas**: The canvas route removes shell padding so the working area reaches the edges of the viewport
 - **Landscape/Portrait**: Works in both orientations with responsive canvas sizing
 - **Viewport Optimization**: Touch scroll is disabled (`touch-action: none`) to allow custom canvas pan/zoom gestures
 
@@ -135,7 +153,7 @@ Reference Board is designed with first-class support for both desktop and mobile
 
 ```
 src/tools/reference-board/
-  types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, ShapeLayer, CanvasLayer, Viewport)
+  types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, ShapeLayer, GridLayer, CanvasLayer, Viewport)
   imageAssets.ts                    — pure helpers for shared base-image/mask asset references
   backgroundMask.ts                 — lazy-loaded segmentation-based background mask inference helper with model fallback
   ../../lib/posterize.ts            — shared grayscale/posterize pixel transformation utilities

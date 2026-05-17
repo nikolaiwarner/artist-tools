@@ -19,6 +19,11 @@
 - **Reference Board** import/paste/camera image additions now auto-optimize image payload size client-side (downscale + smallest format selection) before IndexedDB/sync writes.
 - **Reference Board** image layers now support per-layer tonal controls (Black and White toggle + posterize levels 2-6).
 - **Reference Board** empty-canvas context menu now shows add actions (`Add Text`, `Add Image`) and `Paste`, with long-press support on mobile.
+- **Reference Board** export button now opens PNG options for all layers or selected layers.
+- **Reference Board** now includes a dedicated grid layer type with configurable vertical/horizontal line counts and line color for transfer overlays.
+- **Reference Board** supports locking any layer type; locked layers remain selectable but cannot be dragged/transformed until unlocked.
+- **Reference Board** mobile layer drawer can now be toggled hidden/shown via a floating control to prioritize canvas visibility.
+- **Reference Board** canvas route now removes shell padding so the canvas workspace reaches the viewport edges.
 - The app is intended for GitHub Pages deployment.
 - Routing uses a hash router so tool pages work on static hosting.
 - The shared UI theme is intentionally barebones and compact to maximize visible tool workspace.

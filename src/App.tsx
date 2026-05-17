@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { HomePage } from './pages/HomePage';
 import { AppShellProvider } from './components/AppShellContext';
@@ -12,6 +12,8 @@ import { bootstrapSyncFromStorage } from './sync/syncRuntime';
 
 export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+  const isReferenceCanvasRoute = location.pathname.startsWith('/tools/reference-board/canvas/');
 
   useEffect(() => {
     bootstrapSyncFromStorage();
@@ -22,7 +24,7 @@ export default function App() {
 
   return (
     <AppShellProvider value={{ menuOpen, openMenu: open, closeMenu: close }}>
-      <div className="app-frame theme-barebones">
+      <div className={`app-frame theme-barebones${isReferenceCanvasRoute ? ' app-frame--reference-canvas' : ''}`}>
         {menuOpen && (
           <div className="nav-overlay" onClick={close} aria-hidden="true" />
         )}
@@ -46,7 +48,7 @@ export default function App() {
           </nav>
         </div>
 
-        <main className="site-main">
+        <main className={`site-main${isReferenceCanvasRoute ? ' site-main--reference-canvas' : ''}`}>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/tools/canvas-builder" element={<CanvasBuilderPage />} />

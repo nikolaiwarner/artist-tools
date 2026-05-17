@@ -40,6 +40,10 @@ const canvasStageMocks = vi.hoisted(() => {
     toCanvas() {
       return document.createElement('canvas');
     },
+    findOne() {
+      return null;
+    },
+    toDataURL: vi.fn().mockReturnValue('data:image/png;base64,stage-export'),
   };
 
   return {
@@ -53,6 +57,8 @@ const canvasStageMocks = vi.hoisted(() => {
       fakeStage._scaleY = 1;
       fakeStage._width = 1200;
       fakeStage._height = 800;
+      fakeStage.toDataURL.mockReset();
+      fakeStage.toDataURL.mockReturnValue('data:image/png;base64,stage-export');
     },
   };
 });
@@ -310,6 +316,122 @@ describe('ReferenceBoardCanvasPage', () => {
     expect(await screen.findByTitle(/add box layer/i)).toBeInTheDocument();
   });
 
+  it('renders grid button', async () => {
+    renderCanvas();
+    expect(await screen.findByTitle(/add grid layer/i)).toBeInTheDocument();
+  });
+
+  it('shows export PNG options and disables selected export when nothing is selected', async () => {
+    canvasStageMocks.attachStageRef = true;
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 50,
+        y: 60,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 240,
+        height: 160,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]);
+
+    renderCanvas();
+    await screen.findByTestId('konva-rect');
+
+    fireEvent.click(await screen.findByRole('button', { name: /export options/i }));
+
+    expect(screen.getByRole('menuitem', { name: /export all layers as png/i })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: /export selected layers as png/i })).toBeDisabled();
+  });
+
+  it('exports selected layers as PNG from selected-layer bounds', async () => {
+    canvasStageMocks.attachStageRef = true;
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 10,
+        y: 20,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 100,
+        height: 50,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+      {
+        id: 'shape-layer-2',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 400,
+        y: 300,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 2,
+        width: 160,
+        height: 120,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]);
+
+    const originalCreateElement = document.createElement.bind(document);
+    const anchorClick = vi.fn();
+    const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation(((tagName: string, options?: ElementCreationOptions) => {
+      const element = originalCreateElement(tagName, options);
+      if (tagName.toLowerCase() === 'a') {
+        Object.defineProperty(element, 'click', {
+          configurable: true,
+          value: anchorClick,
+        });
+      }
+      return element;
+    }) as typeof document.createElement);
+
+    const setAttrsSpy = vi.spyOn(canvasStageMocks.fakeStage, 'setAttrs');
+
+    renderCanvas();
+    const rectNodes = await screen.findAllByTestId('konva-rect');
+    fireEvent.click(rectNodes[0]);
+
+    fireEvent.click(await screen.findByRole('button', { name: /export options/i }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /export selected layers as png/i }));
+
+    expect(canvasStageMocks.fakeStage.toDataURL).toHaveBeenCalledWith(expect.objectContaining({
+      mimeType: 'image/png',
+      pixelRatio: 1,
+    }));
+    expect(setAttrsSpy).toHaveBeenCalledWith(expect.objectContaining({
+      x: 30,
+      y: 20,
+      width: 180,
+      height: 130,
+    }));
+    expect(anchorClick).toHaveBeenCalledTimes(1);
+
+    setAttrsSpy.mockRestore();
+    createElementSpy.mockRestore();
+  });
+
   it('renders canvas stage', async () => {
     renderCanvas();
     expect(await screen.findByTestId('konva-stage')).toBeInTheDocument();
@@ -343,6 +465,28 @@ describe('ReferenceBoardCanvasPage', () => {
       fill: 'transparent',
     }));
     expect(await screen.findByTestId('konva-rect')).toBeInTheDocument();
+  });
+
+  it('adds a grid layer and persists it', async () => {
+    renderCanvas();
+
+    const addGridButton = await screen.findByTitle(/add grid layer/i);
+    fireEvent.click(addGridButton);
+
+    expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'proj-1',
+      type: 'grid',
+      width: 480,
+      height: 320,
+      verticalLines: 6,
+      horizontalLines: 6,
+      stroke: '#ffffff',
+      strokeWidth: 1,
+    }));
+
+    expect(await screen.findByText('Grid Layer')).toBeInTheDocument();
+    expect(screen.getByText('Vertical Lines')).toBeInTheDocument();
+    expect(screen.getByText('Horizontal Lines')).toBeInTheDocument();
   });
 
   it('renders canvas background color picker in toolbar', async () => {
@@ -508,6 +652,95 @@ describe('ReferenceBoardCanvasPage', () => {
         zIndex: 3,
       }));
     });
+  });
+
+  it('allows locking a layer and reselecting it to unlock', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 40,
+        y: 60,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 200,
+        height: 120,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]);
+
+    renderCanvas();
+
+    const shapeNode = await screen.findByTestId('konva-rect');
+    fireEvent.click(shapeNode);
+
+    const lockButton = await screen.findByRole('button', { name: /lock layer/i });
+    fireEvent.click(lockButton);
+
+    await vi.waitFor(() => {
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'shape-layer-1',
+        locked: true,
+      }));
+    });
+
+    fireEvent.click(await screen.findByTestId('konva-stage'));
+    fireEvent.click(shapeNode);
+
+    const unlockButton = await screen.findByRole('button', { name: /unlock layer/i });
+    fireEvent.click(unlockButton);
+
+    await vi.waitFor(() => {
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({
+        id: 'shape-layer-1',
+        locked: false,
+      }));
+    });
+  });
+
+  it('toggles layer panel visibility from the mobile panel toggle button', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 40,
+        y: 60,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 200,
+        height: 120,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]);
+
+    const { container } = renderCanvas();
+
+    const shapeNode = await screen.findByTestId('konva-rect');
+    fireEvent.click(shapeNode);
+
+    const panel = container.querySelector('.refboard-layer-panel');
+    expect(panel).toBeInTheDocument();
+    expect(panel).not.toHaveClass('refboard-layer-panel-hidden-mobile');
+
+    fireEvent.click(await screen.findByRole('button', { name: /hide layer panel/i }));
+    expect(panel).toHaveClass('refboard-layer-panel-hidden-mobile');
+
+    fireEvent.click(await screen.findByRole('button', { name: /show layer panel/i }));
+    expect(panel).not.toHaveClass('refboard-layer-panel-hidden-mobile');
   });
 
   it('loads both base image and mask assets for a masked image layer', async () => {

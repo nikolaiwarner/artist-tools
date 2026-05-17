@@ -18,7 +18,8 @@ export interface Viewport {
 interface BaseLayer {
   id: string;
   projectId: string;
-  type: 'image' | 'text' | 'shape';
+  type: 'image' | 'text' | 'shape' | 'grid';
+  locked?: boolean;
   x: number;
   y: number;
   rotation: number;
@@ -74,4 +75,16 @@ export interface ShapeLayer extends BaseLayer {
   scaleY: number;
 }
 
-export type CanvasLayer = ImageLayer | TextLayer | ShapeLayer;
+export interface GridLayer extends BaseLayer {
+  type: 'grid';
+  width: number;
+  height: number;
+  verticalLines: number;
+  horizontalLines: number;
+  stroke: string;
+  strokeWidth: number;
+  scaleX: number;
+  scaleY: number;
+}
+
+export type CanvasLayer = ImageLayer | TextLayer | ShapeLayer | GridLayer;
