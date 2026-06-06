@@ -25,6 +25,15 @@ import {
   collectUnreferencedImageAssetIds,
   getReferencedImageAssetIds,
 } from './imageAssets';
+import {
+  collectLayerSubtreeIds,
+  collectLayersForClipboard,
+  getSelectionRootIds,
+  groupSelection,
+  isGroupLayer,
+  pasteLayersFromClipboard,
+  ungroupSelection,
+} from './groupLayers';
 import { generateMaskDataUrlFromImage } from './backgroundMask';
 import {
   deleteImage,
@@ -36,7 +45,7 @@ import {
   saveLayer,
 } from './db';
 import { ArrowLeft, ImagePlus, Type, Square, Grid3x3, Download, Undo2, Redo2, Camera } from 'lucide-react';
-import type { CanvasLayer, CropRect, GridLayer, ImageLayer, ShapeLayer, TextLayer, Viewport } from './types';
+import type { CanvasLayer, CropRect, GridLayer, GroupLayer, ImageLayer, ShapeLayer, TextLayer, Viewport } from './types';
 import { CanvasStage } from './components/CanvasStage';
 import { ContextMenu } from './components/ContextMenu';
 import { LayerPanel } from './components/LayerPanel';
@@ -121,18 +130,10 @@ function cloneLayerForClipboard(layer: CanvasLayer): CanvasLayer {
     return {
       ...layer,
       crop: layer.crop ? { ...layer.crop } : undefined,
-    } as ImageLayer;
+    };
   }
 
-  if (layer.type === 'shape') {
-    return { ...layer } as ShapeLayer;
-  }
-
-  if (layer.type === 'grid') {
-    return { ...layer } as GridLayer;
-  }
-
-  return { ...layer } as TextLayer;
+  return { ...layer };
 }
 
 function parseLayerClipboardPayload(rawText: string): LayerClipboardPayload | null {
@@ -230,14 +231,23 @@ function getLayerBounds(layer: CanvasLayer): BoundsRect {
     };
   }
 
-  const lines = Math.max(1, layer.text.split('\n').length);
-  const width = layer.width * Math.abs(layer.scaleX);
-  const height = layer.fontSize * TEXT_LINE_HEIGHT_MULTIPLIER * lines * Math.abs(layer.scaleY);
+  if (layer.type === 'text') {
+    const lines = Math.max(1, layer.text.split('\n').length);
+    const width = layer.width * Math.abs(layer.scaleX);
+    const height = layer.fontSize * TEXT_LINE_HEIGHT_MULTIPLIER * lines * Math.abs(layer.scaleY);
+    return {
+      minX: layer.x,
+      minY: layer.y,
+      maxX: layer.x + width,
+      maxY: layer.y + height,
+    };
+  }
+
   return {
     minX: layer.x,
     minY: layer.y,
-    maxX: layer.x + width,
-    maxY: layer.y + height,
+    maxX: layer.x,
+    maxY: layer.y,
   };
 }
 
@@ -1053,6 +1063,77 @@ function GridNode({
   );
 }
 
+interface GroupNodeProps {
+  layer: GroupLayer;
+  isSelected: boolean;
+  isMultiSelected: boolean;
+  transformerRef: React.RefObject<Konva.Transformer | null>;
+  onClick: (e: Konva.KonvaEventObject<MouseEvent>) => void;
+  onTap: () => void;
+  onDragStart: () => void;
+  onDragMove: (x: number, y: number) => void;
+  onDragEnd: (x: number, y: number) => void;
+  onTransformEnd: (scaleX: number, scaleY: number, rotation: number) => void;
+  onContextMenu: (e: Konva.KonvaEventObject<MouseEvent>) => void;
+  children?: React.ReactNode;
+}
+
+function GroupNode({
+  layer,
+  isSelected,
+  isMultiSelected,
+  transformerRef,
+  onClick,
+  onTap,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  onTransformEnd,
+  onContextMenu,
+  children,
+}: GroupNodeProps) {
+  const nodeRef = useRef<Konva.Group>(null);
+
+  useEffect(() => {
+    if (isSelected && !layer.locked && transformerRef.current && nodeRef.current) {
+      transformerRef.current.nodes([nodeRef.current]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+  }, [isSelected, layer.locked, transformerRef]);
+
+  return (
+    <Group
+      ref={nodeRef}
+      id={layer.id}
+      x={layer.x}
+      y={layer.y}
+      scaleX={layer.scaleX}
+      scaleY={layer.scaleY}
+      rotation={layer.rotation}
+      opacity={layer.opacity}
+      draggable={!layer.locked}
+      onClick={onClick}
+      onTap={onTap}
+      onDragStart={onDragStart}
+      onDragMove={(e) => onDragMove(e.target.x(), e.target.y())}
+      onDragEnd={(e) => onDragEnd(e.target.x(), e.target.y())}
+      shadowEnabled={isMultiSelected}
+      shadowColor="#4da3ff"
+      shadowBlur={12}
+      shadowOpacity={0.9}
+      onTransformEnd={(e) => {
+        const node = e.target;
+        onTransformEnd(node.scaleX(), node.scaleY(), node.rotation());
+        node.scaleX(1);
+        node.scaleY(1);
+      }}
+      onContextMenu={onContextMenu}
+    >
+      {children}
+    </Group>
+  );
+}
+
 // ── Main canvas page ─────────────────────────────────────────────────────────
 
 export function ReferenceBoardCanvasPage() {
@@ -1389,10 +1470,7 @@ export function ReferenceBoardCanvasPage() {
 
     if (selectedIds.length === 0) return false;
 
-    const copied = layers
-      .filter((layer) => selectedIds.includes(layer.id))
-      .sort((a, b) => a.zIndex - b.zIndex)
-      .map(cloneLayerForClipboard);
+    const copied = collectLayersForClipboard(layers, selectedIds).map(cloneLayerForClipboard);
 
     if (copied.length === 0) return false;
     copiedLayersRef.current = copied;
@@ -1458,22 +1536,20 @@ export function ReferenceBoardCanvasPage() {
 
     saveToHistory();
 
-    let zIndex = nextZIndex(layers);
-    const pastedIds: string[] = [];
-    const pasted = copied.map((layer) => {
-      const id = newId();
-      pastedIds.push(id);
-      const newLayer: CanvasLayer = {
-        ...layer,
-        id,
-        projectId,
-        x: layer.x + 20,
-        y: layer.y + 20,
-        zIndex: zIndex++,
-      };
-      void saveLayer(newLayer);
-      return newLayer;
+    const pastedResult = pasteLayersFromClipboard({
+      clipboardLayers: copied,
+      projectId,
+      nextZIndex: nextZIndex(layers),
+      createId: newId,
+      offset: { x: 20, y: 20 },
     });
+
+    const pastedIds = pastedResult.pastedRootIds;
+    const pasted = pastedResult.layers;
+
+    for (const newLayer of pasted) {
+      void saveLayer(newLayer);
+    }
 
     scheduleThumbnail();
     setLayers((prev) => [...prev, ...pasted]);
@@ -1593,7 +1669,16 @@ export function ReferenceBoardCanvasPage() {
   function handleDeleteLayers(layerIds: string[]) {
     if (layerIds.length === 0) return;
 
-    const layerIdSet = new Set(layerIds);
+    const rootIds = getSelectionRootIds(layers, layerIds);
+    const layerIdSet = new Set<string>();
+    for (const rootId of rootIds) {
+      const subtreeIds = collectLayerSubtreeIds(layers, rootId);
+      for (const subtreeId of subtreeIds) {
+        layerIdSet.add(subtreeId);
+      }
+    }
+
+    if (layerIdSet.size === 0) return;
     saveToHistory();
 
     setLayers((prev) => {
@@ -1656,9 +1741,15 @@ export function ReferenceBoardCanvasPage() {
     saveToHistory();
 
     if (multiSelectedIds.size > 1 && multiSelectedIds.has(layerId)) {
+      const selectedRoots = getSelectionRootIds(layers, Array.from(multiSelectedIds));
+      const rootIdSet = new Set(selectedRoots);
+      if (!rootIdSet.has(layerId)) {
+        return;
+      }
+
       const startPositions = new Map<string, { x: number; y: number }>();
       for (const layer of layers) {
-        if (multiSelectedIds.has(layer.id)) {
+        if (rootIdSet.has(layer.id)) {
           startPositions.set(layer.id, { x: layer.x, y: layer.y });
         }
       }
@@ -1741,6 +1832,84 @@ export function ReferenceBoardCanvasPage() {
       });
       return reordered;
     });
+  }
+
+  function handleGroupSelection() {
+    const selectedIds = multiSelectedIds.size > 0
+      ? Array.from(multiSelectedIds)
+      : selectedId
+        ? [selectedId]
+        : [];
+    if (selectedIds.length < 2 || !projectId) return;
+
+    const result = groupSelection({
+      layers,
+      selectedIds,
+      projectId,
+      createId: newId,
+    });
+
+    if (!result) return;
+
+    saveToHistory();
+    const previousIds = new Set(layers.map((layer) => layer.id));
+    const nextIds = new Set(result.layers.map((layer) => layer.id));
+
+    setLayers(result.layers);
+    for (const layer of result.layers) {
+      void saveLayer(layer);
+    }
+    for (const layerId of previousIds) {
+      if (!nextIds.has(layerId)) {
+        queueDbMutation(() => deleteLayer(layerId));
+      }
+    }
+
+    setSelectedId(result.groupId);
+    setMultiSelectedIds(new Set([result.groupId]));
+    scheduleThumbnail();
+  }
+
+  function handleUngroupSelection(groupIds?: string[]) {
+    const selectedGroupIds = groupIds && groupIds.length > 0
+      ? groupIds
+      : (() => {
+        const activeIds = multiSelectedIds.size > 0
+          ? Array.from(multiSelectedIds)
+          : selectedId
+            ? [selectedId]
+            : [];
+        return activeIds.filter((id) => {
+          const layer = layers.find((candidate) => candidate.id === id);
+          return !!layer && isGroupLayer(layer);
+        });
+      })();
+
+    if (selectedGroupIds.length === 0) return;
+
+    const result = ungroupSelection({
+      layers,
+      selectedGroupIds,
+    });
+
+    if (result.layers.length === layers.length) return;
+
+    saveToHistory();
+    const nextIds = new Set(result.layers.map((layer) => layer.id));
+
+    setLayers(result.layers);
+    for (const layer of result.layers) {
+      void saveLayer(layer);
+    }
+    for (const groupId of selectedGroupIds) {
+      if (!nextIds.has(groupId)) {
+        queueDbMutation(() => deleteLayer(groupId));
+      }
+    }
+
+    setSelectedId(null);
+    setMultiSelectedIds(new Set());
+    scheduleThumbnail();
   }
 
   function handleFlipH(id: string) {
@@ -2086,7 +2255,10 @@ export function ReferenceBoardCanvasPage() {
     e.evt.preventDefault();
     e.evt.stopPropagation();
     setCanvasContextMenu(null);
-    setSelectedId(layerId);
+    if (!multiSelectedIds.has(layerId)) {
+      setSelectedId(layerId);
+      setMultiSelectedIds(new Set([layerId]));
+    }
     const layer = layers.find((l) => l.id === layerId);
     setContextMenu({ x: e.evt.clientX, y: e.evt.clientY, layerId, layerType: layer?.type ?? 'image' });
   }
@@ -2323,9 +2495,26 @@ export function ReferenceBoardCanvasPage() {
 
   // ── Sorted layers ─────────────────────────────────────────────────────────
 
-  const sortedLayers = useMemo(
-    () => [...layers].sort((a, b) => a.zIndex - b.zIndex),
-    [layers]
+  const layerChildrenMap = useMemo(() => {
+    const map = new Map<string, CanvasLayer[]>();
+
+    for (const layer of layers) {
+      const parentKey = layer.parentId ?? '__root__';
+      const siblings = map.get(parentKey) ?? [];
+      siblings.push(layer);
+      map.set(parentKey, siblings);
+    }
+
+    for (const siblings of map.values()) {
+      siblings.sort((left, right) => left.zIndex - right.zIndex);
+    }
+
+    return map;
+  }, [layers]);
+
+  const rootLayers = useMemo(
+    () => layerChildrenMap.get('__root__') ?? [],
+    [layerChildrenMap],
   );
 
   const selectedLayer = useMemo(
@@ -2341,12 +2530,166 @@ export function ReferenceBoardCanvasPage() {
         : new Set<string>();
 
     if (selectedLayerIds.size === 0) return [];
-    return layers.filter((layer) => selectedLayerIds.has(layer.id));
+    const selectedWithDescendants = new Set<string>();
+    for (const layerId of selectedLayerIds) {
+      const subtreeIds = collectLayerSubtreeIds(layers, layerId);
+      for (const subtreeId of subtreeIds) {
+        selectedWithDescendants.add(subtreeId);
+      }
+    }
+    return layers.filter((layer) => selectedWithDescendants.has(layer.id));
   }, [layers, multiSelectedIds, selectedId]);
 
   // ── Crop overlay state ────────────────────────────────────────────────────
 
   const cropLayer = cropLayerId ? (layers.find((l) => l.id === cropLayerId) as ImageLayer | undefined) : undefined;
+
+  function renderLayerNode(layer: CanvasLayer): React.ReactNode {
+    const childLayers = layerChildrenMap.get(layer.id) ?? [];
+
+    if (layer.type === 'group') {
+      return (
+        <GroupNode
+          key={layer.id}
+          layer={layer as GroupLayer}
+          isSelected={selectedId === layer.id && !cropLayerId}
+          isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
+          transformerRef={transformerRef}
+          onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
+          onTap={() => handleLayerClick(layer.id, false)}
+          onDragStart={() => handleLayerDragStart(layer.id)}
+          onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
+          onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
+          onTransformEnd={(scaleX, scaleY, rotation) =>
+            updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<GroupLayer>)
+          }
+          onContextMenu={(e) => handleContextMenu(e, layer.id)}
+        >
+          {childLayers.map((childLayer) => renderLayerNode(childLayer))}
+        </GroupNode>
+      );
+    }
+
+    if (layer.type === 'image') {
+      return (
+        <ImageNode
+          key={layer.id}
+          layer={layer as ImageLayer}
+          isSelected={selectedId === layer.id && !cropLayerId}
+          isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
+          isCropEditing={cropLayerId === layer.id}
+          transformerRef={transformerRef}
+          imageCache={imageCache}
+          onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
+          onTap={() => handleLayerClick(layer.id, false)}
+          onDragStart={() => handleLayerDragStart(layer.id)}
+          onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
+          onDragEnd={(x, y) => { if (!cropLayerId) handleLayerDragEnd(layer.id, x, y); }}
+          onTransformEnd={(scaleX, scaleY, rotation) =>
+            updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<ImageLayer>)
+          }
+          onContextMenu={(e) => handleContextMenu(e, layer.id)}
+        />
+      );
+    }
+
+    if (layer.type === 'shape') {
+      return (
+        <ShapeNode
+          key={layer.id}
+          layer={layer as ShapeLayer}
+          isSelected={selectedId === layer.id && !cropLayerId}
+          isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
+          transformerRef={transformerRef}
+          onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
+          onTap={() => handleLayerClick(layer.id, false)}
+          onDragStart={() => handleLayerDragStart(layer.id)}
+          onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
+          onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
+          onTransformEnd={(scaleX, scaleY, rotation) =>
+            updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<ShapeLayer>)
+          }
+          onContextMenu={(e) => handleContextMenu(e, layer.id)}
+        />
+      );
+    }
+
+    if (layer.type === 'grid') {
+      return (
+        <GridNode
+          key={layer.id}
+          layer={layer as GridLayer}
+          isSelected={selectedId === layer.id && !cropLayerId}
+          isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
+          transformerRef={transformerRef}
+          onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
+          onTap={() => handleLayerClick(layer.id, false)}
+          onDragStart={() => handleLayerDragStart(layer.id)}
+          onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
+          onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
+          onTransformEnd={(scaleX, scaleY, rotation) =>
+            updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<GridLayer>)
+          }
+          onContextMenu={(e) => handleContextMenu(e, layer.id)}
+        />
+      );
+    }
+
+    return (
+      <TextNode
+        key={layer.id}
+        layer={layer as TextLayer}
+        isSelected={selectedId === layer.id && editingTextId !== layer.id && !cropLayerId}
+        isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
+        isEditing={editingTextId === layer.id}
+        transformerRef={transformerRef}
+        onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
+        onTap={() => handleLayerClick(layer.id, false)}
+        onDblClick={() => setEditingTextId(layer.id)}
+        onDragStart={() => handleLayerDragStart(layer.id)}
+        onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
+        onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
+        onTransformEnd={(scaleX, scaleY, rotation) =>
+          updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<TextLayer>)
+        }
+        onContextMenu={(e) => handleContextMenu(e, layer.id)}
+      />
+    );
+  }
+
+  function renderLayerTreeItem(layer: CanvasLayer, depth = 0): React.ReactNode {
+    const childLayers = layerChildrenMap.get(layer.id) ?? [];
+    const isSelected = selectedId === layer.id || multiSelectedIds.has(layer.id);
+    const label = layer.type === 'group'
+      ? 'Group'
+      : layer.type === 'image'
+        ? 'Image'
+        : layer.type === 'text'
+          ? 'Text'
+          : layer.type === 'shape'
+            ? 'Box'
+            : 'Grid';
+
+    return (
+      <li key={`tree-${layer.id}`}>
+        <button
+          type="button"
+          className={`refboard-layer-tree-item${isSelected ? ' refboard-layer-tree-item-active' : ''}`}
+          style={{ paddingLeft: `${10 + depth * 14}px` }}
+          onClick={(event) => handleLayerClick(layer.id, event.shiftKey)}
+          title={label}
+        >
+          <span className="refboard-layer-tree-item-label">{label}</span>
+          {layer.locked && <span aria-label="Locked">Lock</span>}
+        </button>
+        {childLayers.length > 0 && (
+          <ul className="refboard-layer-tree-list">
+            {childLayers.map((childLayer) => renderLayerTreeItem(childLayer, depth + 1))}
+          </ul>
+        )}
+      </li>
+    );
+  }
 
   if (!project && !loading) {
     return (
@@ -2504,81 +2847,7 @@ export function ReferenceBoardCanvasPage() {
               }
             }}
           >
-            {sortedLayers.map((layer) =>
-              layer.type === 'image' ? (
-                <ImageNode
-                  key={layer.id}
-                  layer={layer as ImageLayer}
-                  isSelected={selectedId === layer.id && !cropLayerId}
-                  isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
-                  isCropEditing={cropLayerId === layer.id}
-                  transformerRef={transformerRef}
-                  imageCache={imageCache}
-                  onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
-                  onTap={() => handleLayerClick(layer.id, false)}
-                  onDragStart={() => handleLayerDragStart(layer.id)}
-                  onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
-                  onDragEnd={(x, y) => { if (!cropLayerId) handleLayerDragEnd(layer.id, x, y); }}
-                  onTransformEnd={(scaleX, scaleY, rotation) =>
-                    updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<ImageLayer>)
-                  }
-                  onContextMenu={(e) => handleContextMenu(e, layer.id)}
-                />
-              ) : layer.type === 'shape' ? (
-                <ShapeNode
-                  key={layer.id}
-                  layer={layer as ShapeLayer}
-                  isSelected={selectedId === layer.id && !cropLayerId}
-                  isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
-                  transformerRef={transformerRef}
-                  onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
-                  onTap={() => handleLayerClick(layer.id, false)}
-                  onDragStart={() => handleLayerDragStart(layer.id)}
-                  onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
-                  onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
-                  onTransformEnd={(scaleX, scaleY, rotation) =>
-                    updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<ShapeLayer>)
-                  }
-                  onContextMenu={(e) => handleContextMenu(e, layer.id)}
-                />
-              ) : layer.type === 'grid' ? (
-                <GridNode
-                  key={layer.id}
-                  layer={layer as GridLayer}
-                  isSelected={selectedId === layer.id && !cropLayerId}
-                  isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
-                  transformerRef={transformerRef}
-                  onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
-                  onTap={() => handleLayerClick(layer.id, false)}
-                  onDragStart={() => handleLayerDragStart(layer.id)}
-                  onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
-                  onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
-                  onTransformEnd={(scaleX, scaleY, rotation) =>
-                    updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<GridLayer>)
-                  }
-                  onContextMenu={(e) => handleContextMenu(e, layer.id)}
-                />
-              ) : (
-                <TextNode
-                  key={layer.id}
-                  layer={layer as TextLayer}
-                  isSelected={selectedId === layer.id && editingTextId !== layer.id && !cropLayerId}
-                  isMultiSelected={multiSelectedIds.size > 1 && multiSelectedIds.has(layer.id)}
-                  isEditing={editingTextId === layer.id}
-                  transformerRef={transformerRef}
-                  onClick={(e) => handleLayerClick(layer.id, e.evt.shiftKey)}
-                  onTap={() => handleLayerClick(layer.id, false)}
-                  onDblClick={() => setEditingTextId(layer.id)}
-                  onDragStart={() => handleLayerDragStart(layer.id)}
-                  onDragMove={(x, y) => handleLayerDragMove(layer.id, x, y)}
-                  onDragEnd={(x, y) => handleLayerDragEnd(layer.id, x, y)}
-                  onTransformEnd={(scaleX, scaleY, rotation) =>
-                    updateLayer(layer.id, { scaleX, scaleY, rotation } as Partial<TextLayer>)
-                  }
-                  onContextMenu={(e) => handleContextMenu(e, layer.id)}
-                />
-              )
-            )}
+            {rootLayers.map((layer) => renderLayerNode(layer))}
             {cropLayerId && cropState && cropLayer && (
               <CropHandles
                 layer={cropLayer}
@@ -2603,6 +2872,7 @@ export function ReferenceBoardCanvasPage() {
             onBringForward={() => handleLayerOrder(selectedLayer.id, 'forward')}
             onSendBackward={() => handleLayerOrder(selectedLayer.id, 'backward')}
             onSendToBack={() => handleLayerOrder(selectedLayer.id, 'back')}
+            onUngroup={selectedLayer.type === 'group' ? () => handleUngroupSelection([selectedLayer.id]) : undefined}
             onFlipH={selectedLayer.type === 'image' ? () => handleFlipH(selectedLayer.id) : undefined}
             onFlipV={selectedLayer.type === 'image' ? () => handleFlipV(selectedLayer.id) : undefined}
             onCropStart={selectedLayer.type === 'image' ? () => startCrop(selectedLayer.id) : undefined}
@@ -2611,6 +2881,33 @@ export function ReferenceBoardCanvasPage() {
             onDetectMask={selectedLayer.type === 'image' ? () => void handleDetectMask(selectedLayer.id) : undefined}
             isDetectingMask={selectedLayer.type === 'image' && maskDetectingLayerId === selectedLayer.id}
           />
+        )}
+
+        {layers.length > 0 && (
+          <aside className="refboard-layer-tree-panel" aria-label="Layer hierarchy">
+            <div className="refboard-panel-section">
+              <p className="refboard-panel-eyebrow">Layers</p>
+              <div className="refboard-panel-row">
+                <button
+                  type="button"
+                  onClick={handleGroupSelection}
+                  disabled={multiSelectedIds.size < 2}
+                >
+                  Group
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUngroupSelection()}
+                  disabled={!selectedLayer || selectedLayer.type !== 'group'}
+                >
+                  Ungroup
+                </button>
+              </div>
+            </div>
+            <ul className="refboard-layer-tree-list">
+              {rootLayers.map((layer) => renderLayerTreeItem(layer))}
+            </ul>
+          </aside>
         )}
 
         {selectedLayer && (
@@ -2628,6 +2925,7 @@ export function ReferenceBoardCanvasPage() {
           <aside className="refboard-multi-select-panel" aria-label="Multi-selection status">
             <p className="refboard-panel-eyebrow">Selection</p>
             <p>{multiSelectedIds.size} layers selected</p>
+            <button onClick={handleGroupSelection}>Group selected layers</button>
             <button
               className="refboard-delete-btn"
               onClick={() => handleDeleteLayers(Array.from(multiSelectedIds))}
@@ -2792,6 +3090,17 @@ export function ReferenceBoardCanvasPage() {
           onSendToBack={() => handleLayerOrder(contextMenu.layerId, 'back')}
           onBringForward={() => handleLayerOrder(contextMenu.layerId, 'forward')}
           onSendBackward={() => handleLayerOrder(contextMenu.layerId, 'backward')}
+          onGroup={multiSelectedIds.size > 1 ? handleGroupSelection : undefined}
+          onUngroup={(() => {
+            const selectedIds = multiSelectedIds.size > 0
+              ? Array.from(multiSelectedIds)
+              : [contextMenu.layerId];
+            const selectedGroups = selectedIds.filter((id) => {
+              const layer = layers.find((candidate) => candidate.id === id);
+              return !!layer && isGroupLayer(layer);
+            });
+            return selectedGroups.length > 0 ? () => handleUngroupSelection(selectedGroups) : undefined;
+          })()}
           onCropStart={contextMenu.layerType === 'image' ? () => startCrop(contextMenu.layerId) : undefined}
           cropLabel={(() => {
             const l = layers.find((layer) => layer.id === contextMenu.layerId) as ImageLayer | undefined;

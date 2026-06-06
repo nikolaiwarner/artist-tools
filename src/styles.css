@@ -1611,6 +1611,55 @@ p {
   align-self: flex-start;
 }
 
+.refboard-layer-tree-panel {
+  width: 240px;
+  flex-shrink: 0;
+  border: 1px solid var(--stroke);
+  border-radius: 6px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 180px);
+  overflow: hidden;
+}
+
+.refboard-layer-tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.refboard-layer-tree-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border: none;
+  background: transparent;
+  color: #171717;
+  border-radius: 4px;
+  text-align: left;
+  font-size: 0.8rem;
+}
+
+.refboard-layer-tree-item:hover {
+  background: #f2f2ee;
+}
+
+.refboard-layer-tree-item-active {
+  background: rgba(15, 78, 58, 0.12);
+  color: #0f4e3a;
+}
+
+.refboard-layer-tree-item-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+}
+
 .refboard-panel-section {
   padding: 10px;
   border-bottom: 1px solid var(--stroke);
@@ -2128,6 +2177,11 @@ p {
     border-bottom: none;
     z-index: 100;
     animation: slideUp 0.3s ease-out;
+  }
+
+  .refboard-layer-tree-panel {
+    width: 100%;
+    max-height: 42vh;
   }
 
   .refboard-mobile-panel-toggle {

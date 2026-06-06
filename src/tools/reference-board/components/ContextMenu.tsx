@@ -15,6 +15,8 @@ interface ContextMenuProps {
   onSendToBack?: () => void;
   onBringForward?: () => void;
   onSendBackward?: () => void;
+  onGroup?: () => void;
+  onUngroup?: () => void;
   onCropStart?: () => void;
   cropLabel?: string;
 }
@@ -34,6 +36,8 @@ export function ContextMenu({
   onSendToBack,
   onBringForward,
   onSendBackward,
+  onGroup,
+  onUngroup,
   onCropStart,
   cropLabel = 'Crop Image',
 }: ContextMenuProps) {
@@ -88,7 +92,9 @@ export function ContextMenu({
       {onDuplicate && item('Duplicate', onDuplicate)}
       {onPaste && item('Paste', onPaste)}
       {onCropStart && item(cropLabel, onCropStart)}
-      {(onCopy || onDuplicate || onPaste || onCropStart) && (onBringToFront || onSendToBack || onBringForward || onSendBackward || onDelete) && (
+      {onGroup && item('Group', onGroup)}
+      {onUngroup && item('Ungroup', onUngroup)}
+      {(onCopy || onDuplicate || onPaste || onCropStart || onGroup || onUngroup) && (onBringToFront || onSendToBack || onBringForward || onSendBackward || onDelete) && (
         <div className="refboard-ctx-divider" />
       )}
       {onBringToFront && item('Bring to Front', onBringToFront)}

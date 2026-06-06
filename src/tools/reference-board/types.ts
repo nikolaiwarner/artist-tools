@@ -18,7 +18,8 @@ export interface Viewport {
 interface BaseLayer {
   id: string;
   projectId: string;
-  type: 'image' | 'text' | 'shape' | 'grid';
+  type: 'image' | 'text' | 'shape' | 'grid' | 'group';
+  parentId?: string;
   locked?: boolean;
   x: number;
   y: number;
@@ -87,4 +88,10 @@ export interface GridLayer extends BaseLayer {
   scaleY: number;
 }
 
-export type CanvasLayer = ImageLayer | TextLayer | ShapeLayer | GridLayer;
+export interface GroupLayer extends BaseLayer {
+  type: 'group';
+  scaleX: number;
+  scaleY: number;
+}
+
+export type CanvasLayer = ImageLayer | TextLayer | ShapeLayer | GridLayer | GroupLayer;

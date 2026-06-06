@@ -37,12 +37,16 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Export**: toolbar download icon opens PNG export options for `Export all layers as PNG` and `Export selected layers as PNG`
 - **Undo/Redo**: toolbar buttons or Ctrl+Z / Ctrl+Shift+Z (Cmd+Z / Cmd+Shift+Z on Mac)
 - **Copy/Paste Layers**: Ctrl/Cmd+C copies the current selection; Ctrl/Cmd+V pastes the copied layers (or clipboard images if available)
+- **Grouping**: with 2+ selected layers, create a group that supports full transform behavior (move/scale/rotate), copy/paste, delete, and ungroup
+- Groups can contain other groups for nested layer hierarchies
 - **Box Select**: click and drag on empty canvas to draw a blue selection rectangle; layers fully inside the box are selected
 - Box select works for image, text, box, and grid layers
 - Single match selects that layer (transformer handles shown); multiple matches enter multi-select state
 - Multi-selected layers are highlighted and can be dragged together while preserving their relative spacing
 - Multi-selection can be deleted with Delete/Backspace or the multi-select panel action
+- Multi-selection panel includes `Group selected layers` when 2+ layers are selected
 - Clicking empty canvas deselects all layers
+- A dedicated layer hierarchy panel shows nested structure and supports quick Group/Ungroup actions and direct layer selection
 
 #### Mobile Touch Controls
 - **Pan**: Two-finger drag to pan around the canvas
@@ -105,11 +109,12 @@ Reference Board is an infinite-canvas reference image board for painters, illust
 - **Desktop**: Right-click (or long press on touch) opens context menu: Bring to Front, Bring Forward, Send Backward, Send to Back
 - **Mobile**: Long-press (hold 500ms) on a layer to open context menu with the same layer ordering options
 - Context menu also provides Copy, Delete, and Duplicate
+- Context menu now includes Group (for multi-selection) and Ungroup (for selected groups)
 - Right-clicking empty canvas space shows a canvas context menu with `Add Text`, `Add Image`, and `Paste`
 - Layer panel provides duplicate (copy icon), delete (trash icon), and ordering buttons (Top/Up/Down/Bottom)
 
 ### Layer Locking
-- All layer types support a lock toggle in the selected-layer panel
+- All layer types (including groups) support a lock toggle in the selected-layer panel
 - Locked layers remain selectable (tap/click to select), so users can still open the layer panel and unlock them
 - Locked layers cannot be dragged or transformed until unlocked
 
@@ -153,8 +158,10 @@ Reference Board is designed with first-class support for both desktop and mobile
 
 ```
 src/tools/reference-board/
-  types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, ShapeLayer, GridLayer, CanvasLayer, Viewport)
+  types.ts                          — TypeScript interfaces (ProjectMeta, ImageLayer, TextLayer, ShapeLayer, GridLayer, GroupLayer, CanvasLayer, Viewport)
   imageAssets.ts                    — pure helpers for shared base-image/mask asset references
+  groupLayers.ts                    — pure grouping utilities (nested subtree selection, group/ungroup math, clipboard remapping)
+  groupLayers.test.ts               — unit tests for grouping helpers and nested behavior
   backgroundMask.ts                 — lazy-loaded segmentation-based background mask inference helper with model fallback
   ../../lib/posterize.ts            — shared grayscale/posterize pixel transformation utilities
   referenceBoard.ts                 — pure project CRUD + layer-ordering helpers (no I/O except localStorage)

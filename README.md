@@ -152,12 +152,14 @@ Key features:
 - Text layers with font, size, bold/italic, color, and alignment controls
 - Box layers for composition guides with resizable rectangle bounds plus stroke/fill controls
 - Grid layers for transfer practice with configurable vertical/horizontal line counts and line color
+- Nested layer groups that can be created from multi-selection and then moved, scaled, rotated, copied, pasted, deleted, and ungrouped
 - Right-click context menu: layer ordering (front/back/forward/backward), duplicate, delete
-- Universal layer locking for image/text/box/grid layers (locked layers stay selectable for quick unlock)
+- Universal layer locking for image/text/box/grid/group layers (locked layers stay selectable for quick unlock)
 - Mobile layer panel can be hidden/shown with a floating toggle to maximize visible canvas area while editing
 - Reference Board canvas route renders full-bleed (no shell padding) so canvas space reaches the viewport edges
 - Empty-canvas context menu: right-click (desktop) or long-press (mobile) opens `Add Text`, `Add Image`, and `Paste`
 - Selected-layer panel buttons for ordering (front/forward/backward/back) in addition to duplicate/delete controls
+- Dedicated layer hierarchy panel with nested tree view and quick Group/Ungroup actions
 - Ctrl/Cmd+C and Ctrl/Cmd+V layer copy/paste uses the system clipboard, including cross-project paste
 - Cross-project pastes duplicate image/mask assets with new IDs so asset identities stay unique between projects
 - Images and mask assets stored in IndexedDB; project metadata stored in localStorage

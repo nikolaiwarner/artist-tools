@@ -129,7 +129,18 @@ vi.mock('react-konva', () => ({
       onClick={(e) => { e.stopPropagation(); onClick?.({ evt: { shiftKey: !!e.shiftKey } }); }}
     />
   ),
-  Group: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Group: ({ id, children, onClick }: { id?: string; children: React.ReactNode; onClick?: (e: { evt: { shiftKey: boolean } }) => void }) => (
+    <div
+      data-testid="konva-group"
+      data-layer-id={id}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.({ evt: { shiftKey: !!e.shiftKey } });
+      }}
+    >
+      {children}
+    </div>
+  ),
   Line: () => <div />,
 }));
 
@@ -1313,6 +1324,111 @@ describe('ReferenceBoardCanvasPage', () => {
     });
     expect(deleteImage).not.toHaveBeenCalledWith('img-shared');
     expect(preventDefault).toHaveBeenCalled();
+  });
+
+  it('groups selected layers from the multi-selection panel', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 40,
+        y: 60,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        width: 120,
+        height: 100,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+      {
+        id: 'shape-layer-2',
+        projectId: 'proj-1',
+        type: 'shape',
+        shape: 'rectangle',
+        x: 240,
+        y: 180,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 2,
+        width: 140,
+        height: 110,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ]);
+
+    renderCanvas();
+
+    const shapeNodes = await screen.findAllByTestId('konva-rect');
+    fireEvent.click(shapeNodes[0]);
+    fireEvent.click(shapeNodes[1], { shiftKey: true });
+
+    const groupButton = await screen.findByRole('button', { name: /group selected layers/i });
+    fireEvent.click(groupButton);
+
+    await vi.waitFor(() => {
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({ type: 'group' }));
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'shape-layer-1', parentId: expect.any(String) }));
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'shape-layer-2', parentId: expect.any(String) }));
+    });
+  });
+
+  it('ungroups a selected group from the layer panel', async () => {
+    vi.mocked(loadLayersForProject).mockResolvedValueOnce([
+      {
+        id: 'group-layer-1',
+        projectId: 'proj-1',
+        type: 'group',
+        x: 60,
+        y: 80,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 1,
+        scaleX: 1,
+        scaleY: 1,
+      },
+      {
+        id: 'shape-layer-1',
+        projectId: 'proj-1',
+        type: 'shape',
+        parentId: 'group-layer-1',
+        shape: 'rectangle',
+        x: 10,
+        y: 15,
+        rotation: 0,
+        opacity: 1,
+        zIndex: 2,
+        width: 100,
+        height: 80,
+        stroke: '#4da3ff',
+        strokeWidth: 4,
+        fill: 'transparent',
+        scaleX: 1,
+        scaleY: 1,
+      },
+    ] as never);
+
+    renderCanvas();
+
+    const groupNode = await screen.findByTestId('konva-group');
+    fireEvent.click(groupNode);
+
+    const ungroupButton = await screen.findByTitle(/ungroup selected group/i);
+    fireEvent.click(ungroupButton);
+
+    await vi.waitFor(() => {
+      expect(deleteLayer).toHaveBeenCalledWith('group-layer-1');
+      expect(saveLayer).toHaveBeenCalledWith(expect.objectContaining({ id: 'shape-layer-1', parentId: undefined }));
+    });
   });
 
   it('copies and pastes selected layers with Cmd/Ctrl+C and Cmd/Ctrl+V', async () => {

@@ -21,6 +21,7 @@
 - **Reference Board** empty-canvas context menu now shows add actions (`Add Text`, `Add Image`) and `Paste`, with long-press support on mobile.
 - **Reference Board** export button now opens PNG options for all layers or selected layers.
 - **Reference Board** now includes a dedicated grid layer type with configurable vertical/horizontal line counts and line color for transfer overlays.
+- **Reference Board** now supports nested layer groups; grouped layers can be moved, scaled, rotated, copied, pasted, deleted, and ungrouped.
 - **Reference Board** supports locking any layer type; locked layers remain selectable but cannot be dragged/transformed until unlocked.
 - **Reference Board** mobile layer drawer can now be toggled hidden/shown via a floating control to prioritize canvas visibility.
 - **Reference Board** canvas route now removes shell padding so the canvas workspace reaches the viewport edges.
@@ -71,8 +72,9 @@
 - Art Pricing Calculator shows concise per-input `Default:` hints in-context across artwork, advanced, and reverse inputs.
 - `src/tools/art-pricing/*.test.ts*`: pricing logic and page behavior tests
 - `src/tools/reference-board/README.md`: **canonical feature spec** for Reference Board
-- `src/tools/reference-board/types.ts`: shared TypeScript types (ProjectMeta, ImageLayer, TextLayer, CanvasLayer, Viewport)
+- `src/tools/reference-board/types.ts`: shared TypeScript types (ProjectMeta, ImageLayer, TextLayer, GroupLayer, CanvasLayer, Viewport)
 - `src/tools/reference-board/referenceBoard.ts`: pure project CRUD, project pin sorting, and layer ordering helpers (localStorage)
+- `src/tools/reference-board/groupLayers.ts`: pure nested-group helpers (selection roots, subtree traversal, group/ungroup transforms, clipboard remapping)
 - `src/tools/reference-board/db.ts`: IndexedDB wrapper using `idb` (images + layers stores)
 - `src/tools/reference-board/imageAssets.ts`: pure helpers for shared image and mask asset reference tracking
 - `src/tools/reference-board/backgroundMask.ts`: lazy-loaded segmentation pipeline helper for on-device image mask detection (MODNet-first with fallback models)

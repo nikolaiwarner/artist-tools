@@ -25,6 +25,7 @@ interface LayerPanelProps {
   onBringForward?: () => void;
   onSendBackward?: () => void;
   onSendToBack?: () => void;
+  onUngroup?: () => void;
   onFlipH?: () => void;
   onFlipV?: () => void;
   onCropStart?: () => void;
@@ -44,6 +45,7 @@ export function LayerPanel({
   onBringForward,
   onSendBackward,
   onSendToBack,
+  onUngroup,
   onFlipH,
   onFlipV,
   onCropStart,
@@ -105,7 +107,9 @@ export function LayerPanel({
                 ? 'Text Layer'
                 : layer.type === 'shape'
                   ? 'Shape Layer'
-                  : 'Grid Layer'
+                  : layer.type === 'grid'
+                    ? 'Grid Layer'
+                    : 'Group Layer'
           }
         </p>
         <div className="refboard-panel-row">
@@ -162,6 +166,13 @@ export function LayerPanel({
             <ChevronsDown size={15} />
           </button>
         </div>
+        {layer.type === 'group' && onUngroup && (
+          <div className="refboard-panel-row" style={{ marginTop: 8 }}>
+            <button onClick={onUngroup} className="refboard-icon-btn" title="Ungroup selected group" style={{ width: '100%' }}>
+              Ungroup
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="refboard-panel-section">
