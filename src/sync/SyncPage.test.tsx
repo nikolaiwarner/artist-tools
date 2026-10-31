@@ -15,11 +15,11 @@ const syncDataMocks = vi.hoisted(() => ({
   parseBackupDocument: vi.fn(),
 }));
 
-const autoSyncMock = vi.fn((_serverUrl: string, _syncKey: string, _callbacks: unknown) => vi.fn());
+const autoSyncMock = vi.fn((_serverUrl: string, _syncKey: string, _callbacks: unknown, _syncToken: string) => vi.fn());
 
 vi.mock('./yjsAutoSync', () => ({
-  startYjsAutoSync: (serverUrl: string, syncKey: string, callbacks: unknown) =>
-    autoSyncMock(serverUrl, syncKey, callbacks),
+  startYjsAutoSync: (serverUrl: string, syncKey: string, callbacks: unknown, syncToken: string) =>
+    autoSyncMock(serverUrl, syncKey, callbacks, syncToken),
 }));
 
 vi.mock('./syncData', () => ({
@@ -100,7 +100,7 @@ describe('SyncPage', () => {
       target: { value: 'abc123' },
     });
 
-    expect(localStorage.getItem('artist-tools.sync')).toBe('{"serverUrl":"","syncKey":""}');
+    expect(localStorage.getItem('artist-tools.sync')).toBe('{"serverUrl":"","syncKey":"","syncToken":""}');
     expect(autoSyncMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /save and connect/i }));
@@ -109,8 +109,55 @@ describe('SyncPage', () => {
     expect(autoSyncMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3579',
       'abc123',
-      expect.any(Object)
+      expect.any(Object),
+      ''
     );
+  });
+
+  it('saves the shared secret and connects with it', () => {
+    renderSyncPage();
+
+    fireEvent.change(screen.getByLabelText(/server url/i), {
+      target: { value: 'http://127.0.0.1:3579' },
+    });
+    fireEvent.change(screen.getByLabelText(/sync key/i), {
+      target: { value: 'abc123' },
+    });
+    fireEvent.change(screen.getByLabelText(/shared secret/i), {
+      target: { value: 'secret value' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /save and connect/i }));
+
+    expect(JSON.parse(localStorage.getItem('artist-tools.sync') ?? '{}').syncToken).toBe('secret value');
+    expect(autoSyncMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3579',
+      'abc123',
+      expect.any(Object),
+      'secret value'
+    );
+  });
+
+  it('keeps working with settings saved before the shared secret existed', () => {
+    localStorage.setItem('artist-tools.sync', '{"serverUrl":"http://127.0.0.1:3579","syncKey":"abc123"}');
+    renderSyncPage();
+
+    expect(screen.getByLabelText(/shared secret/i)).toHaveValue('');
+  });
+
+  it('sends the shared secret when refreshing server stats', async () => {
+    localStorage.setItem(
+      'artist-tools.sync',
+      '{"serverUrl":"http://127.0.0.1:3579","syncKey":"abc123","syncToken":"secret value"}'
+    );
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockClear();
+    renderSyncPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /refresh server stats/i }));
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('http://127.0.0.1:3579/stats?token=secret%20value');
+    });
   });
 
   it('generate key only updates draft until confirm is clicked', () => {
@@ -123,7 +170,7 @@ describe('SyncPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /generate/i }));
 
     expect(screen.getByLabelText(/sync key/i)).toHaveValue('11111111-1111-4111-8111-111111111111');
-    expect(localStorage.getItem('artist-tools.sync')).toBe('{"serverUrl":"","syncKey":""}');
+    expect(localStorage.getItem('artist-tools.sync')).toBe('{"serverUrl":"","syncKey":"","syncToken":""}');
     expect(autoSyncMock).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /save and connect/i }));
@@ -132,7 +179,8 @@ describe('SyncPage', () => {
     expect(autoSyncMock).toHaveBeenCalledWith(
       'http://127.0.0.1:3579',
       '11111111-1111-4111-8111-111111111111',
-      expect.any(Object)
+      expect.any(Object),
+      ''
     );
   });
 

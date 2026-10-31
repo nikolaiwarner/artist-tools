@@ -84,3 +84,11 @@ Realtime transport details:
 - `GET /health` returns basic liveness.
 - `GET /stats` returns cumulative inbound/outbound bytes/messages plus per-room activity and persistence counters.
 - Set `METRICS_LOG_INTERVAL` (minutes) to print periodic bandwidth summaries to stdout.
+
+## Authentication
+
+Set `SYNC_TOKEN` before exposing the server. Clients enter the same value as the Shared secret on the Sync page, and send it as `?token=` on `/yjs-ws/<key>` and `/stats`. `/health` stays open.
+
+Without `SYNC_TOKEN`, the server logs a warning and accepts every connection. That is for local development only.
+
+Run the auth tests with `node --test auth.test.mjs`.

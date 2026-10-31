@@ -38,8 +38,9 @@ function saveSettings(settings: SyncSettings): void {
   saveSyncSettingsToStorage(settings);
 }
 
-function buildStatsUrl(serverUrl: string): string {
-  return `${serverUrl.replace(/\/$/, '')}/stats`;
+function buildStatsUrl(serverUrl: string, syncToken: string): string {
+  const query = syncToken ? `?token=${encodeURIComponent(syncToken)}` : '';
+  return `${serverUrl.replace(/\/$/, '')}/stats${query}`;
 }
 
 function formatBytes(bytes: number): string {
@@ -82,6 +83,7 @@ export function SyncPage() {
     const nextSettings = {
       serverUrl: draftSettings.serverUrl.trim(),
       syncKey: draftSettings.syncKey.trim(),
+      syncToken: draftSettings.syncToken.trim(),
     };
 
     setSettings(nextSettings);
@@ -107,7 +109,7 @@ export function SyncPage() {
     statsRequestInFlightRef.current = true;
 
     try {
-      const response = await fetch(buildStatsUrl(serverUrl));
+      const response = await fetch(buildStatsUrl(serverUrl, settings.syncToken.trim()));
       if (!response.ok) {
         throw new Error(`Server responded ${response.status} ${response.statusText}`.trim());
       }
@@ -121,7 +123,7 @@ export function SyncPage() {
       statsRequestInFlightRef.current = false;
       setStatsLoading(false);
     }
-  }, [settings.serverUrl]);
+  }, [settings.serverUrl, settings.syncToken]);
 
   useEffect(() => {
     if (!statsAutoRefresh) return;
@@ -231,6 +233,18 @@ export function SyncPage() {
               Generate
             </button>
           </div>
+          <label className="field-label" htmlFor="sync-token">
+            Shared secret
+          </label>
+          <input
+            id="sync-token"
+            type="password"
+            className="text-input"
+            autoComplete="off"
+            placeholder="The server's SYNC_TOKEN"
+            value={draftSettings.syncToken}
+            onChange={(e) => setDraftSettings((s) => ({ ...s, syncToken: e.target.value }))}
+          />
           <div className="sync-actions-row">
             <button type="button" className="primary-button" onClick={saveAndConnect}>
               Save and connect

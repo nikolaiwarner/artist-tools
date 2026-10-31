@@ -30,12 +30,12 @@ export function getSyncSettingsFromStorage(): SyncSettings {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
-      return JSON.parse(raw) as SyncSettings;
+      return { syncToken: '', ...JSON.parse(raw) } as SyncSettings;
     }
   } catch {
     // ignore invalid settings
   }
-  return { serverUrl: '', syncKey: '' };
+  return { serverUrl: '', syncKey: '', syncToken: '' };
 }
 
 export function saveSyncSettingsToStorage(settings: SyncSettings): void {
@@ -59,8 +59,9 @@ export function applySyncSettings(
 ): void {
   const serverUrl = settings.serverUrl.trim();
   const syncKey = settings.syncKey.trim();
+  const syncToken = settings.syncToken.trim();
 
-  const signature = `${serverUrl}::${syncKey}`;
+  const signature = `${serverUrl}::${syncKey}::${syncToken}`;
   if (!serverUrl || !syncKey) {
     if (stopSync) {
       stopSync();
@@ -111,7 +112,7 @@ export function applySyncSettings(
       });
       callbacks.onConnectionStatus?.(status);
     },
-  });
+  }, syncToken);
 }
 
 export function bootstrapSyncFromStorage(): void {

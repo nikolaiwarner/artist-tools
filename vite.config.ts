@@ -1,3 +1,4 @@
+import { configDefaults } from 'vitest/config';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -10,6 +11,8 @@ export default defineConfig(({ command }) => ({
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: './src/test/setup.ts'
+    setupFiles: './src/test/setup.ts',
+    // sync-server/ runs its own node:test suite.
+    exclude: [...configDefaults.exclude, 'sync-server/**']
   }
 }));

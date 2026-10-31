@@ -17,15 +17,20 @@ export type AutoSyncCallbacks = {
   onConnectionStatus?: (status: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
 };
 
+export function buildProviderOptions(syncToken: string): { params?: Record<string, string> } {
+  return syncToken ? { params: { token: syncToken } } : {};
+}
+
 export function startYjsAutoSync(
   serverUrl: string,
   key: string,
-  callbacks: AutoSyncCallbacks = {}
+  callbacks: AutoSyncCallbacks = {},
+  syncToken = ''
 ): () => void {
   const doc = new Y.Doc();
   const root = doc.getMap<string>(ROOT_MAP_NAME);
   const wsBaseUrl = `${serverUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:').replace(/\/$/, '')}/yjs-ws`;
-  const provider = new WebsocketProvider(wsBaseUrl, key, doc);
+  const provider = new WebsocketProvider(wsBaseUrl, key, doc, buildProviderOptions(syncToken));
 
   let stopped = false;
   let initialized = false;

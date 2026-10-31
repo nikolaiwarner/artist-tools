@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
@@ -8,12 +9,22 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
+import { writeFileAtomic } from './atomicWrite.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 3579;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const ENABLE_WS_COMPRESSION = process.env.WS_PERMESSAGE_DEFLATE !== 'false';
 const WS_COMPRESSION_THRESHOLD = Number(process.env.WS_COMPRESSION_THRESHOLD) || 2048;
+
+const SYNC_TOKEN = process.env.SYNC_TOKEN || '';
+
+function tokenMatches(provided) {
+  if (typeof provided !== 'string' || !provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(SYNC_TOKEN);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
 
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -193,7 +204,7 @@ function getOrCreateDoc(key) {
     const timer = setTimeout(() => {
       try {
         const fullState = Y.encodeStateAsUpdate(doc);
-        fs.writeFileSync(persistPath, JSON.stringify({ updateBase64: bytesToBase64(fullState) }), 'utf8');
+        writeFileAtomic(persistPath, JSON.stringify({ updateBase64: bytesToBase64(fullState) }));
         recordPersistenceMetrics(docState, fullState.byteLength);
         persistenceTimers.delete(key);
       } catch (err) {
@@ -250,7 +261,7 @@ function closeConnection(docState, conn) {
         const persistPath = keyToYjsPath(docState.key);
         if (persistPath) {
           const fullState = Y.encodeStateAsUpdate(docState.doc);
-          fs.writeFileSync(persistPath, JSON.stringify({ updateBase64: bytesToBase64(fullState) }), 'utf8');
+          writeFileAtomic(persistPath, JSON.stringify({ updateBase64: bytesToBase64(fullState) }));
           recordPersistenceMetrics(docState, fullState.byteLength);
         }
       } catch (err) {
@@ -346,7 +357,8 @@ function setupWSConnection(docState, conn) {
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 // GET /stats — lightweight sync bandwidth and room activity snapshot
-app.get('/stats', (_req, res) => {
+app.get('/stats', (req, res) => {
+  if (SYNC_TOKEN && !tokenMatches(req.query.token)) return res.sendStatus(401);
   const now = Date.now();
   const rooms = Array.from(roomMetrics.values())
     .map((metrics) => {
@@ -399,6 +411,11 @@ if (process.env.MEM_LOG_INTERVAL) {
 const server = app.listen(PORT, () => {
   console.log(`Artist Tools sync server listening on port ${PORT}`);
   console.log(`Data directory: ${DATA_DIR}`);
+  if (SYNC_TOKEN) {
+    console.log('Auth enabled — clients must connect with ?token=<SYNC_TOKEN>');
+  } else {
+    console.warn('WARNING: SYNC_TOKEN is not set — any client can read and write your data. Set it before exposing this port.');
+  }
   console.log('Press Ctrl+C to stop.');
   console.log(`Persistence debounce: ${PERSISTENCE_DEBOUNCE_MS}ms (batches writes)`);
   console.log(`WebSocket compression: ${ENABLE_WS_COMPRESSION ? `enabled (threshold ${WS_COMPRESSION_THRESHOLD} bytes)` : 'disabled'}`);
@@ -433,6 +450,13 @@ if (process.env.METRICS_LOG_INTERVAL) {
 server.on('upgrade', (request, socket, head) => {
   const url = new URL(request.url ?? '/', `http://${request.headers.host}`);
   if (!url.pathname.startsWith('/yjs-ws/')) {
+    socket.destroy();
+    return;
+  }
+
+  if (SYNC_TOKEN && !tokenMatches(url.searchParams.get('token'))) {
+    console.warn(`Rejected sync upgrade without valid token from ${request.socket.remoteAddress}`);
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
     socket.destroy();
     return;
   }
